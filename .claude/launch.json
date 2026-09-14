@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "foodapp-static",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\yuval\\AppData\\Local\\Temp\\claude\\C--Users-yuval-My-Drive-Claude-FoodApp\\7e8e4fa2-9e04-47c8-8777-67700956004f\\scratchpad\\serve.cjs"],
+      "port": 4599
+    },
+    {
+      "name": "python-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "G:/האחסון שלי/Claude/FoodApp"],
+      "port": 8000
+    },
+    {
+      "name": "npx-serve",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-l", "3000"],
+      "port": 3000
+    }
+  ]
+}

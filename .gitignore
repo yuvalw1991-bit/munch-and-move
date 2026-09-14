@@ -1,0 +1,46 @@
+node_modules/
+.env
+.env.local
+.env*.local
+.vercel
+.DS_Store
+
+.vercel
+
+# Claude Code local settings + deploy flag
+.claude/settings.local.json
+.claude/.needs-deploy
+
+# Test artifacts (never deploy)
+.playwright-mcp/
+*-verify.png
+_check.js
+_c.js
+p1.json
+p2.json
+p3.json
+
+# ── נוסף 14.9.2026, בהכנה לריפו ──────────────────────────────
+# מצב מקומי של ההוקים (דגלי פריסה ואישור QA) — לא שייך לריפו.
+.claude/.needs-deploy*
+.claude/.qa-passed
+
+# צילומי QA ומוקאפים — תיעוד עבודה, לא קוד. נשמרים בדרייב.
+ach-*.jpeg
+agent-proposal.jpeg
+analytics-tab.jpeg
+eatwin-desktop.png
+qa-*.png
+reminders-modal.jpeg
+tpl-desktop.png
+volt-mockup.png
+water-qa*.jpeg
+weight-qa.jpeg
+
+# סרטוני הפרסומת (~40MB) — שיווק, לא חלק מהאפליקציה.
+# exercises/*.mp4 כן נכנסים: index.html מגיש אותם ישירות.
+munch-and-move-ad*.mp4
+
+# שאריות
+tailwind.css.bak
+_scratch/

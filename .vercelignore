@@ -1,0 +1,23 @@
+# Dev-only — keep these out of the production deploy.
+.claude/
+tasks/
+.playwright-mcp/
+*-verify.png
+*.jpeg
+ach-*.png
+volt-mockup.png
+qa-*.png
+eatwin-desktop.png
+# תיעוד פנימי — CLAUDE.md הוגש פומבית ב-/CLAUDE.md עד 3.8.2026
+*.md
+# סרטוני הפרסומת (~40MB) — אף קובץ באפליקציה לא מפנה אליהם.
+# חייב להיות ממוקד ולא *.mp4: הדפוסים נבדקים מול שם הקובץ בכל עומק, ו-*.mp4
+# היה מוחק גם את 12 סרטוני התרגילים ב-exercises/ ש-index.html מגיש ישירות.
+munch-and-move-ad*.mp4
+_check.js
+_c.js
+p1.json
+p2.json
+p3.json
+.DS_Store
+_scratch/

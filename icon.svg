@@ -1,0 +1,52 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="neon" x1="60" y1="150" x2="452" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c6ff00"/>
+      <stop offset="0.45" stop-color="#00e5ff"/>
+      <stop offset="0.80" stop-color="#2f6bff"/>
+      <stop offset="1" stop-color="#c6ff00"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d1018"/>
+      <stop offset="1" stop-color="#06070d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="256" cy="232" r="250" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00e5ff" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#15c6c0" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#00e5ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <filter id="blurSmall" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+
+  <!-- dark squircle background -->
+  <rect x="0" y="0" width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="116" fill="url(#glow)"/>
+  <rect x="3" y="3" width="506" height="506" rx="113" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="2"/>
+
+  <!-- soft neon glow behind the mark -->
+  <g filter="url(#blur)" opacity="0.55">
+    <path d="M150 360 L150 168 L256 292 L362 168 L362 360" fill="none" stroke="url(#neon)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- M monogram (Munch & Move) -->
+  <path d="M150 360 L150 168 L256 292 L362 168 L362 360" fill="none" stroke="url(#neon)" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- neon nodes at the peaks (echo the app's macro rings) -->
+  <g>
+    <circle cx="150" cy="168" r="9" fill="#eaffa0" filter="url(#blurSmall)"/>
+    <circle cx="150" cy="168" r="7" fill="#f3ffce"/>
+    <circle cx="362" cy="168" r="9" fill="#9fd0ff" filter="url(#blurSmall)"/>
+    <circle cx="362" cy="168" r="7" fill="#cfe6ff"/>
+    <circle cx="256" cy="292" r="8" fill="#7fffe0" filter="url(#blurSmall)"/>
+    <circle cx="256" cy="292" r="6" fill="#c6fff0"/>
+  </g>
+
+  <!-- activity pulse (Move) — a subtle heartbeat baseline under the M -->
+  <path d="M104 408 L196 408 L226 372 L256 430 L286 408 L408 408" fill="none" stroke="#00ffa3" stroke-opacity="0.9" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" filter="url(#blurSmall)"/>
+  <path d="M104 408 L196 408 L226 372 L256 430 L286 408 L408 408" fill="none" stroke="#9dffe0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

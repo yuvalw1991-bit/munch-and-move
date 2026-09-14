@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'G:\\האחסון שלי\\Claude\\FoodApp\\.codex\\hooks\\flag-deploy.mjs'",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'G:\\האחסון שלי\\Claude\\FoodApp\\.codex\\hooks\\qa-agent-rule.mjs'",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'G:\\האחסון שלי\\Claude\\FoodApp\\.codex\\hooks\\deploy.mjs'",
+            "timeout": 180,
+            "statusMessage": "פורס ל-Vercel..."
+          }
+        ]
+      }
+    ]
+  }
+}
