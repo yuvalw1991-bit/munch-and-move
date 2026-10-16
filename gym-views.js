@@ -623,9 +623,10 @@
     const rpe = +d.rpe || 0;
     const level = actLevel(rpe);
     const minutes = Math.max(1, Math.round(+d.minutes || 50));
-    const text = String(d.text || '').trim().slice(0, 200);
+    const text = String(d.text || '').trim();                 // any length; the full text is kept
+    const short = text.length > 140 ? text.slice(0, 140) + '…' : text;   // the one-line title only
     const burn = actBurn(Object.assign({}, d, { kind, minutes }));
-    const base = kind === 'other' ? (text || 'פעילות אחרת') : (ACT_LABEL[kind]||'').replace(/^\S+ /,'') + (d.classType ? ' · ' + d.classType : '') + (text ? ' · ' + text : '');
+    const base = kind === 'other' ? (short || 'פעילות אחרת') : (ACT_LABEL[kind]||'').replace(/^\S+ /,'') + (d.classType ? ' · ' + d.classType : '') + (short ? ' · ' + short : '');
     const w = { id: b.uid(), type, level, minutes, kcal: burn.gross, kcalNet: burn.net, note: base };
     const day = d.day || b.todayKey();
     b.addWorkout(w, day);
@@ -652,8 +653,8 @@
       const burn = actBurn(d);
       const ph = d.kind === 'other' ? 'למשל: טניס, גינון, טיול עם הכלב, שיעור ריקוד' : 'פרטים, אם רוצים (לא חובה)';
       return '<div class="flex flex-wrap gap-2">' + Object.entries(ACT_LABEL).map(([k,l])=> '<button class="gy-btn gy-chip' + (d.kind===k?' on':'') + '" data-kind="' + k + '">' + l + '</button>').join('') + '</div>' +
-        (recent.length ? '<div class="gy-lbl mt-3 mb-1">ממה שרשמת בעבר</div><div class="flex flex-wrap gap-2">' + recent.map((t,i)=> '<button class="gy-btn gy-chip' + (d.kind==='other' && d.text===t ? ' on' : '') + '" data-recent="' + i + '">✨ ' + esc(t) + '</button>').join('') + '</div>' : '') +
-        '<label class="block mt-3"><div class="gy-lbl mb-1">' + (d.kind === 'other' ? 'מה עשית?' : 'מה עשית? (טקסט חופשי)') + '</div><textarea class="gy-in" id="acText" rows="2" maxlength="200" style="resize:none;line-height:1.5" placeholder="' + ph + '">' + esc(d.text) + '</textarea></label>' +
+        (recent.length ? '<div class="gy-lbl mt-3 mb-1">ממה שרשמת בעבר</div><div class="flex flex-wrap gap-2">' + recent.map((t,i)=> '<button class="gy-btn gy-chip' + (d.kind==='other' && d.text===t ? ' on' : '') + '" data-recent="' + i + '">✨ ' + esc(t.length > 40 ? t.slice(0, 40) + '…' : t) + '</button>').join('') + '</div>' : '') +
+        '<label class="block mt-3"><div class="gy-lbl mb-1">' + (d.kind === 'other' ? 'מה עשית?' : 'מה עשית? (טקסט חופשי)') + '</div><textarea class="gy-in" id="acText" rows="3" style="resize:vertical;min-height:72px;line-height:1.5" placeholder="' + ph + '">' + esc(d.text) + '</textarea></label>' +
         '<div class="gy-grid2 mt-3"><label><div class="gy-lbl mb-1">תאריך</div><input class="gy-in" type="date" id="acDay" value="' + d.day + '" max="' + B().todayKey() + '"></label><label><div class="gy-lbl mb-1">דקות</div><input class="gy-in" type="number" inputmode="numeric" id="acMin" value="' + d.minutes + '"></label></div>' +
         (d.kind === 'pilates' ? '<div class="gy-grid2 mt-2"><label><div class="gy-lbl mb-1">שם המדריך או המדריכה</div><input class="gy-in" id="acIns" value="' + esc(d.instructor) + '"></label><label><div class="gy-lbl mb-1">סוג השיעור</div><input class="gy-in" id="acCls" list="acClsList" value="' + esc(d.classType) + '"><datalist id="acClsList"><option value="פילאטיס מכשירים"><option value="פילאטיס מכשירים מודרני"><option value="פילאטיס מזרן"></datalist></label></div>' : '') +
         (warn ? '<div class="gy-card gy-warn mt-2" style="padding:10px;font-size:12px">⚠️ ' + esc(warn) + '</div>' : '') +
