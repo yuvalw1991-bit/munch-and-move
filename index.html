@@ -7052,19 +7052,22 @@
     if(dl && dl.offsetParent) return dl;
     return null;
   }
+  // The top bar is pinned: when the rank strip has scrolled up under it, effects start
+  // just below the bar instead of off-screen.
+  function gamTopMin(){ const h=$('appHeader'); return h ? h.getBoundingClientRect().bottom : 0; }
   function floatXP(amount){
     if(!(amount>0)) return;
     const anchor=gamAnchor(); if(!anchor) return;
     const r=anchor.getBoundingClientRect();
     const f=document.createElement('div'); f.className='xp-float'; f.textContent='+'+amount+' XP';
-    f.style.left=(r.left + r.width/2)+'px'; f.style.top=(r.top+6)+'px';
+    f.style.left=(r.left + r.width/2)+'px'; f.style.top=Math.max(r.top+6, gamTopMin()+6)+'px';
     document.body.appendChild(f); setTimeout(()=>f.remove(), 1250);
   }
   function burstConfetti(){
     const colors=['#c6ff00','#00e5ff','#ff9500','#00ffa3','#ff4d6d','#2f6bff','#ffc24b'];
     const anchor=gamAnchor();
     const r=anchor?anchor.getBoundingClientRect():{left:innerWidth/2,top:innerHeight*0.3,width:0,height:0};
-    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    const cx=r.left+r.width/2, cy=Math.max(r.top+r.height/2, gamTopMin()+30);
     const box=document.createElement('div'); box.className='confetti-box';
     for(let i=0;i<40;i++){
       const p=document.createElement('i');
