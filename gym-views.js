@@ -162,7 +162,9 @@
       ex: orig ? (orig.exercises||[]).map(e=> ({ exId: e.exId || G.matchId(e.name) || '', orig: e, name: e.name, note: e.note || '', sets: (e.sets||[]).map(s=> Object.assign({}, s)) })) : [],
     };
     const opts = sel=> '<option value="">— אחר —</option>' + lib.map(x=> '<option value="' + x.id + '"' + (x.id===sel?' selected':'') + '>' + esc(x.he) + (x.active?'':' (לא פעיל)') + '</option>').join('');
-    const sp = { open: !orig && !pre, text:'', img:null, busy:false, err:'' };
+    const sp = { open: !orig && !pre, text: eopts.autoText || '', img:null, busy:false, err:'' };
+    if(eopts.autoText) sp.open = true;
+    if(eopts.minutes > 0) draft.minutes = Math.round(eopts.minutes);
     function smartBox(){
       if(!sp.open) return '<button class="gy-btn gy-chip mb-3" id="spOpen">🧠 פירוק חכם: הדבקת אימון שלם</button>';
       return '<div class="gy-card mb-3" style="padding:12px"><div class="font-black text-gray-100 mb-1">🧠 פירוק חכם</div>' +
@@ -316,6 +318,7 @@
     }
     function open(){ const el = sheet(orig ? 'עריכת אימון' : (eopts.trainer ? '👩‍🏫 בדיקה לפני שמירה' : 'אימון בדיעבד'), (eopts.trainer ? '<div class="text-[12px] gy-mut mb-3" style="margin-top:-6px">כך הבנתי את התוכנית. אפשר לתקן כל מספר, ואז לשמור.</div>' : '') + html(), bind, 'gyEdit'); el.dataset.tok = TOK; }
     open();
+    if(eopts.autoText){ const go = document.querySelector('#gyEdit #spGo'); if(go) go.click(); }
   };
 
   // ---------- trainer session import (WhatsApp text and/or screenshot) ----------

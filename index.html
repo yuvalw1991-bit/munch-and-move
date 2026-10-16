@@ -453,8 +453,9 @@
       <!-- Minutes + free-text -->
       <div class="flex gap-2 mb-2">
         <input id="woMinutes" type="number" inputmode="decimal" placeholder="דקות" class="input-dark in-g w-24 border border-line rounded-xl px-3 py-2.5 text-sm text-center font-bold text-gray-100 placeholder-gray-600 outline-none">
-        <input id="woNote" type="text" placeholder="תיאור חופשי (אופציונלי) — ריצה 5 ק״מ בפארק" class="input-dark in-g w-full flex-1 border border-line rounded-xl px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none">
+        <textarea id="woNote" rows="1" placeholder="תיאור חופשי (אופציונלי) — ריצה 5 ק״מ בפארק, או הדבקה של אימון שלם" class="input-dark in-g w-full flex-1 border border-line rounded-xl px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none" style="resize:vertical;min-height:44px;line-height:1.5"></textarea>
       </div>
+      <button id="woSmartBtn" class="hidden w-full btn-neon text-white rounded-xl py-2.5 mb-2 text-[13px] font-black active:scale-95 transition">🧠 פירוק חכם לתרגילים, סטים ומשקלים</button>
       <!-- Strength logging: exercises → sets (reps × weight). Optional, collapsed by default. -->
       <div class="input-dark border border-line rounded-xl p-2.5 mb-2">
         <button id="woSetsToggle" class="w-full flex items-center justify-between text-right">
@@ -1305,9 +1306,9 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=14"></script>
-<script src="gym-ui.js?v=14"></script>
-<script src="gym-views.js?v=14"></script>
+<script src="gym-core.js?v=16"></script>
+<script src="gym-ui.js?v=16"></script>
+<script src="gym-views.js?v=16"></script>
 <script src="celebrate.js?v=4"></script>
 <script>
 (function(){
@@ -4249,7 +4250,20 @@
   $('woMinutes').addEventListener('input', ()=>{ woAiKcal = null; woAiAnalysis = null; updateWoPreview(); });
   // Editing the free-text description invalidates a previous AI analysis too —
   // otherwise the old workout's kcal/analysis get logged with the new text.
-  $('woNote').addEventListener('input', ()=>{ woAiKcal = null; woAiAnalysis = null; updateWoPreview(); });
+  $('woNote').addEventListener('input', ()=>{ woAiKcal = null; woAiAnalysis = null; updateWoPreview(); paintWoSmart(); });
+  // A pasted strength workout (several lines, or numbers like "20 קג 2x15") gets the smart
+  // split: exercises, sets, weights and difficulty — instead of a one-line calorie note.
+  function paintWoSmart(){
+    const t = $('woNote').value, el = $('woNote');
+    el.style.height = 'auto'; el.style.height = Math.min(260, Math.max(44, el.scrollHeight + 2)) + 'px';
+    const looks = /\n/.test(t.trim()) || /\d\s*[x×*]\s*\d|\d+\s*(ק"ג|ק״ג|קג|kg)|חזר|סט/i.test(t);
+    $('woSmartBtn').classList.toggle('hidden', !(looks && window.Gym && Gym.openEditor));
+  }
+  $('woSmartBtn').onclick = ()=>{
+    const text = $('woNote').value.trim(); if(!text || !window.Gym) return;
+    const min = parseFloat($('woMinutes').value) || null;
+    Gym.openEditor(viewKey, null, { autoText: text, minutes: min });
+  };
 
   // Rich breakdown of an AI-analyzed workout: focus, muscles worked, stimulus bars, protein, tip.
   function woAnalysisHTML(a){
@@ -4334,7 +4348,7 @@
     dayWorkouts().push(w);
     save(LS.workouts, allWorkouts);
     cInsertWorkout(w, viewKey);
-    $('woMinutes').value=''; $('woNote').value=''; woAiKcal=null; woAiAnalysis=null;
+    $('woMinutes').value=''; $('woNote').value=''; woAiKcal=null; woAiAnalysis=null; try{ paintWoSmart(); }catch(_){}
     $('woPreview').classList.add('hidden');
     woEx = []; renderWoEx();
     renderAll();
@@ -10013,6 +10027,13 @@
     chatMsgsEl.scrollTop = chatMsgsEl.scrollHeight;
   }
 
+  // Three or more lines, at least two of them with sets/reps/weights.
+  function looksLikeWorkout(t){
+    const lines = String(t||'').split(/\n/).map(l=> l.trim()).filter(Boolean);
+    if(lines.length < 3) return false;
+    const hits = lines.filter(l=> /\d\s*[x×*]\s*\d|\d+(\.\d+)?\s*(ק"ג|ק״ג|קג|kg)|\d+\s*חז|\d+\s*סט|סט\s*\d/i.test(l)).length;
+    return hits >= 2;
+  }
   async function sendChat(){
     const text = chatInput.value.trim();
     const atts = pendingAtts.slice();
@@ -10028,6 +10049,19 @@
     appendBubble('user', text, atts);
     const um = { role:'user', text, ts: Date.now(), attachments: atts };
     messages.push(um);
+    // A whole strength workout pasted into the chat goes to the smart split (every
+    // exercise, set, weight and difficulty, any length) instead of a one-shot reply
+    // that can cut a long list short.
+    if(!atts.length && looksLikeWorkout(text) && window.Gym && Gym.openEditor){
+      const note = 'זיהיתי כאן אימון שלם. פתחתי את הפירוק החכם: כל התרגילים, הסטים והמשקלים יופיעו לבדיקה, ואז "שמירה".';
+      appendBubble('model', note);
+      const mm = { role:'model', text:note, ts: Date.now() };
+      messages.push(mm);
+      if(sess){ sess.messages.push({ role:'user', text, ts:um.ts, attachments:[] }, mm); sess.updatedAt = Date.now(); }
+      persistSessions();
+      Gym.openEditor(todayKey(), null, { autoText: text });
+      return;
+    }
     // Persist WITHOUT the heavy base64 payload (keeps localStorage small); a light
     // placeholder keeps the history readable.
     if(sess){

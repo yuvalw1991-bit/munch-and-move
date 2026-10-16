@@ -393,7 +393,7 @@ export default async function handler(req, res) {
         systemInstruction: { parts: [{ text: sysText }] },
         // Generous output budget so Hebrew replies never truncate mid-sentence
         // (the old 800 cap did); thinking off keeps replies coherent + fast.
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
 
