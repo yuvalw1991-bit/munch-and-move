@@ -61,6 +61,17 @@
   *::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
   *::-webkit-scrollbar-thumb { background: transparent; }
   *::-webkit-scrollbar-track { background: transparent; }
+  /* The top bar (logo, date, menu) stays put like the tab bar; only the content scrolls.
+     It carries the notch padding itself, and anchors scrolled into view land below it. */
+  #appHeader{ position:sticky; top:0; z-index:35; margin:0 -1rem; padding-left:1rem; padding-right:1rem;
+    padding-top:calc(env(safe-area-inset-top) + 1.5rem);
+    border-bottom:1px solid rgba(255,255,255,.06); }
+  /* The blur sits on a layer behind the bar, not on the bar itself: a blurred parent
+     would stop the ☰ dropdown inside it from blurring the cards behind it. */
+  #appHeader::before{ content:""; position:absolute; inset:0; z-index:-1; pointer-events:none;
+    background:rgba(6,7,13,.86); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+  @media (min-width:1024px){ #appHeader{ margin:0 -2rem; padding-left:2rem; padding-right:2rem; } }
+  html{ scroll-padding-top:calc(env(safe-area-inset-top) + 96px); }
   body {
     -webkit-tap-highlight-color: transparent;
     background:
@@ -249,10 +260,10 @@
   </div>
 </aside>
 <div class="lg:flex-1 lg:min-w-0">
-<div id="appMain" class="max-w-md mx-auto px-4 lg:max-w-4xl lg:px-8" style="padding-top:env(safe-area-inset-top);padding-bottom:calc(5rem + env(safe-area-inset-bottom))">
+<div id="appMain" class="max-w-md mx-auto px-4 lg:max-w-4xl lg:px-8" style="padding-bottom:calc(5rem + env(safe-area-inset-bottom))">
 
   <!-- Header -->
-  <header class="flex items-center justify-between pt-6 pb-4">
+  <header id="appHeader" class="flex items-center justify-between pb-4">
     <div>
       <h1 dir="ltr" class="text-2xl font-black tracking-tight neon-grad whitespace-nowrap lg:hidden">Munch &amp; Move</h1>
       <div class="flex items-center gap-1.5 mt-0.5">
