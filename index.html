@@ -1286,9 +1286,10 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=6"></script>
-<script src="gym-ui.js?v=6"></script>
-<script src="gym-views.js?v=6"></script>
+<script src="gym-core.js?v=7"></script>
+<script src="gym-ui.js?v=7"></script>
+<script src="gym-views.js?v=7"></script>
+<script src="celebrate.js?v=1"></script>
 <script>
 (function(){
   'use strict';
@@ -6644,68 +6645,160 @@
   // Each badge carries its own unlock test(s) → adding a badge is a one-liner and
   // computeGamification stays generic. LOTS of milestones, so there is almost always
   // a next reward within reach — that is the whole point (long-term motivation).
+  // Every badge is a threshold on one number in the stats (key ≥ n), so the achievements
+  // screen can show progress ("עוד 3") for anything still locked. tier: b/s/g/l
+  // (ברונזה/כסף/זהב/אגדי) sets how big the celebration is. cat groups the screen.
+  const BADGE_CATS = [
+    ['track','📗 מעקב ורצף'], ['nutri','🥗 תזונה'], ['workout','🤸 אימונים'], ['live','🏋️ אימון חי'],
+    ['prog','📈 התקדמות ושיאים'], ['power','🧱 כוח וסיבולת'], ['variety','🗺️ מגוון'], ['week','🎯 יעד שבועי'],
+    ['coach','👩‍🏫 אימון עם מאמן/ת'], ['studio','🌀 פילאטיס וריקוד'], ['weight','⚖️ משקל'], ['water','💧 מים'],
+    ['measure','📏 היקפים'], ['eatwin','🕐 חלון אכילה'], ['app','✨ האפליקציה'], ['level','🏆 רמות ו-XP'],
+  ];
+  const BD = (id, icon, title, desc, key, n, tier, cat)=> ({ id, icon, title, desc, key, n, tier, cat, test:s=> (+s[key]||0) >= n });
   const BADGES = [
     // — נוכחות ומעקב —
-    { id:'first',    icon:'🌱', title:'צעד ראשון',    desc:'הרישום הראשון ביומן',  test:s=>s.tracked>=1 },
-    { id:'track3',   icon:'🌿', title:'3 ימי מעקב',   desc:'3 ימים עם רישום',      test:s=>s.tracked>=3 },
-    { id:'track7',   icon:'📗', title:'שבוע מעקב',    desc:'7 ימים עם רישום',      test:s=>s.tracked>=7 },
-    { id:'track14',  icon:'📘', title:'14 ימי מעקב',  desc:'14 ימים עם רישום',     test:s=>s.tracked>=14 },
-    { id:'track30',  icon:'📚', title:'30 ימי מעקב',  desc:'30 ימים עם רישום',     test:s=>s.tracked>=30 },
-    { id:'track50',  icon:'📖', title:'50 ימי מעקב',  desc:'50 ימים עם רישום',     test:s=>s.tracked>=50 },
-    { id:'track100', icon:'🧠', title:'100 ימי מעקב', desc:'100 ימים עם רישום',    test:s=>s.tracked>=100 },
-    { id:'track200', icon:'🎓', title:'200 ימי מעקב', desc:'200 ימים עם רישום',    test:s=>s.tracked>=200 },
-    { id:'track365', icon:'🏛️', title:'שנה של מעקב',  desc:'365 ימים עם רישום',    test:s=>s.tracked>=365 },
+    BD('first',    '🌱','צעד ראשון',    'הרישום הראשון ביומן',  'tracked',1,  'b','track'),
+    BD('track3',   '🌿','3 ימי מעקב',   '3 ימים עם רישום',      'tracked',3,  'b','track'),
+    BD('track7',   '📗','שבוע מעקב',    '7 ימים עם רישום',      'tracked',7,  'b','track'),
+    BD('track14',  '📘','14 ימי מעקב',  '14 ימים עם רישום',     'tracked',14, 's','track'),
+    BD('track30',  '📚','30 ימי מעקב',  '30 ימים עם רישום',     'tracked',30, 's','track'),
+    BD('track50',  '📖','50 ימי מעקב',  '50 ימים עם רישום',     'tracked',50, 'g','track'),
+    BD('track100', '🧠','100 ימי מעקב', '100 ימים עם רישום',    'tracked',100,'g','track'),
+    BD('track200', '🎓','200 ימי מעקב', '200 ימים עם רישום',    'tracked',200,'l','track'),
+    BD('track365', '🏛️','שנה של מעקב',  '365 ימים עם רישום',    'tracked',365,'l','track'),
     // — רצף —
-    { id:'streak3',  icon:'✨', title:'3 ברצף',       desc:'3 ימי מעקב רצופים',    test:s=>s.streak>=3 },
-    { id:'streak7',  icon:'🔥', title:'שבוע ברצף',    desc:'7 ימי מעקב רצופים',    test:s=>s.streak>=7 },
-    { id:'streak14', icon:'⚡', title:'שבועיים ברצף', desc:'14 ימי מעקב רצופים',   test:s=>s.streak>=14 },
-    { id:'streak21', icon:'☄️', title:'3 שבועות ברצף',desc:'21 ימי מעקב רצופים',   test:s=>s.streak>=21 },
-    { id:'streak30', icon:'💎', title:'חודש ברצף',    desc:'30 ימי מעקב רצופים',   test:s=>s.streak>=30 },
-    { id:'streak50', icon:'🛡️', title:'50 ברצף',      desc:'50 ימי מעקב רצופים',   test:s=>s.streak>=50 },
-    { id:'streak100',icon:'🏅', title:'100 ברצף',     desc:'100 ימי מעקב רצופים',  test:s=>s.streak>=100 },
-    { id:'streak200',icon:'🔱', title:'200 ברצף',     desc:'200 ימי מעקב רצופים',  test:s=>s.streak>=200 },
-    { id:'streak365',icon:'👑', title:'שנה ברצף',     desc:'365 ימי מעקב רצופים',  test:s=>s.streak>=365 },
+    BD('streak3',  '✨','3 ברצף',       '3 ימי מעקב רצופים',    'streak',3,  'b','track'),
+    BD('streak7',  '🔥','שבוע ברצף',    '7 ימי מעקב רצופים',    'streak',7,  's','track'),
+    BD('streak14', '⚡','שבועיים ברצף', '14 ימי מעקב רצופים',   'streak',14, 's','track'),
+    BD('streak21', '☄️','3 שבועות ברצף','21 ימי מעקב רצופים',   'streak',21, 'g','track'),
+    BD('streak30', '💎','חודש ברצף',    '30 ימי מעקב רצופים',   'streak',30, 'g','track'),
+    BD('streak50', '🛡️','50 ברצף',      '50 ימי מעקב רצופים',   'streak',50, 'g','track'),
+    BD('streak100','🏅','100 ברצף',     '100 ימי מעקב רצופים',  'streak',100,'l','track'),
+    BD('streak200','🔱','200 ברצף',     '200 ימי מעקב רצופים',  'streak',200,'l','track'),
+    BD('streak365','👑','שנה ברצף',     '365 ימי מעקב רצופים',  'streak',365,'l','track'),
+    BD('entries50', '🍽️','50 רישומים',  '50 פריטים נרשמו ביומן',  'foodEntries',50, 'b','track'),
+    BD('entries200','🍱','200 רישומים', '200 פריטים נרשמו ביומן', 'foodEntries',200,'s','track'),
+    BD('comeback',  '🫶','חזרת!',       'חזרת לעקוב אחרי הפסקה',   'comeback',1,     's','track'),
     // — אימונים —
-    { id:'workout1', icon:'🤸', title:'אימון ראשון',  desc:'רשמת אימון ראשון',     test:s=>s.workoutCount>=1 },
-    { id:'workout5', icon:'💪', title:'5 אימונים',    desc:'רשמת 5 אימונים',       test:s=>s.workoutCount>=5 },
-    { id:'workout10',icon:'🏋️', title:'10 אימונים',   desc:'רשמת 10 אימונים',      test:s=>s.workoutCount>=10 },
-    { id:'workout25',icon:'🥊', title:'25 אימונים',   desc:'רשמת 25 אימונים',      test:s=>s.workoutCount>=25 },
-    { id:'workout50',icon:'🦾', title:'50 אימונים',   desc:'רשמת 50 אימונים',      test:s=>s.workoutCount>=50 },
-    { id:'workout100',icon:'🐉',title:'100 אימונים',  desc:'רשמת 100 אימונים',     test:s=>s.workoutCount>=100 },
-    // — ימים מאוזנים (כל 3 המאקרו) —
-    { id:'balanced1',   icon:'⭐', title:'יום מאוזן',     desc:'כל שלושת המאקרו ביעד ביום', test:s=>s.balancedDays>=1 },
-    { id:'balanced7',   icon:'🌈', title:'7 ימים מאוזנים', desc:'7 ימים מאוזנים (סה״כ)',    test:s=>s.balancedDays>=7 },
-    { id:'balanced30',  icon:'🌟', title:'30 ימים מאוזנים',desc:'30 ימים מאוזנים (סה״כ)',   test:s=>s.balancedDays>=30 },
-    { id:'balanced100', icon:'💫', title:'100 מאוזנים',   desc:'100 ימים מאוזנים (סה״כ)',   test:s=>s.balancedDays>=100 },
-    { id:'balancedWeek',icon:'👑', title:'שבוע מאוזן',    desc:'7 ימים מאוזנים ברצף',       test:s=>s.balancedRun>=7 },
-    { id:'balancedFort',icon:'🎯', title:'שבועיים מאוזנים',desc:'14 ימים מאוזנים ברצף',     test:s=>s.balancedRun>=14 },
-    // — מאקרו בנפרד —
-    { id:'protein7',  icon:'🥩', title:'מלך החלבון',  desc:'7 ימים ביעד החלבון',   test:s=>s.proteinDays>=7 },
-    { id:'protein30', icon:'🍖', title:'אלוף החלבון', desc:'30 ימים ביעד החלבון',  test:s=>s.proteinDays>=30 },
-    { id:'carb7',     icon:'🍞', title:'איזון פחמימה', desc:'7 ימים ביעד הפחמימות', test:s=>s.carbDays>=7 },
-    { id:'fat7',      icon:'🥑', title:'שומן חכם',    desc:'7 ימים ביעד השומן',    test:s=>s.fatDays>=7 },
-    // — יום פעיל (מזון + אימון) —
-    { id:'active1',  icon:'🔗', title:'יום פעיל',    desc:'מזון + אימון באותו יום', test:s=>s.activeDays>=1 },
-    { id:'active7',  icon:'🤝', title:'שבוע פעיל',   desc:'7 ימים פעילים',         test:s=>s.activeDays>=7 },
-    { id:'active30', icon:'🚀', title:'חודש פעיל',   desc:'30 ימים פעילים',        test:s=>s.activeDays>=30 },
+    BD('workout1', '🤸','אימון ראשון',  'רשמת אימון ראשון',     'workoutCount',1,  'b','workout'),
+    BD('workout5', '💪','5 אימונים',    'רשמת 5 אימונים',       'workoutCount',5,  'b','workout'),
+    BD('workout10','🏋️','10 אימונים',   'רשמת 10 אימונים',      'workoutCount',10, 's','workout'),
+    BD('workout25','🥊','25 אימונים',   'רשמת 25 אימונים',      'workoutCount',25, 's','workout'),
+    BD('workout50','🦾','50 אימונים',   'רשמת 50 אימונים',      'workoutCount',50, 'g','workout'),
+    BD('workout100','🐉','100 אימונים', 'רשמת 100 אימונים',     'workoutCount',100,'l','workout'),
+    BD('active1',  '🔗','יום פעיל',    'מזון + אימון באותו יום', 'activeDays',1,  'b','workout'),
+    BD('active7',  '🤝','שבוע פעיל',   '7 ימים פעילים',         'activeDays',7,  's','workout'),
+    BD('active30', '🚀','חודש פעיל',   '30 ימים פעילים',        'activeDays',30, 'g','workout'),
+    // — ימים מאוזנים ומאקרו —
+    BD('balanced1',   '⭐','יום מאוזן',      'כל שלושת המאקרו ביעד ביום', 'balancedDays',1,  'b','nutri'),
+    BD('balanced7',   '🌈','7 ימים מאוזנים', '7 ימים מאוזנים (סה״כ)',    'balancedDays',7,  's','nutri'),
+    BD('balanced30',  '🌟','30 ימים מאוזנים','30 ימים מאוזנים (סה״כ)',   'balancedDays',30, 'g','nutri'),
+    BD('balanced100', '💫','100 מאוזנים',   '100 ימים מאוזנים (סה״כ)',   'balancedDays',100,'l','nutri'),
+    BD('balancedWeek','👑','שבוע מאוזן',    '7 ימים מאוזנים ברצף',       'balancedRun',7,  'g','nutri'),
+    BD('balancedFort','🎯','שבועיים מאוזנים','14 ימים מאוזנים ברצף',     'balancedRun',14, 'l','nutri'),
+    BD('protein7',  '🥩','מלך החלבון',  '7 ימים ביעד החלבון',   'proteinDays',7,  's','nutri'),
+    BD('protein30', '🍖','אלוף החלבון', '30 ימים ביעד החלבון',  'proteinDays',30, 'g','nutri'),
+    BD('carb7',     '🍞','איזון פחמימה','7 ימים ביעד הפחמימות', 'carbDays',7,     's','nutri'),
+    BD('fat7',      '🥑','שומן חכם',    '7 ימים ביעד השומן',    'fatDays',7,      's','nutri'),
+    // — אימון חי —
+    BD('live1',   '🎬','אימון חי ראשון', 'סיימת אימון ראשון במצב אימון חי', 'liveCount',1,  'b','live'),
+    BD('live5',   '🎧','5 אימונים חיים', '5 אימונים במצב אימון חי',         'liveCount',5,  's','live'),
+    BD('live10',  '🎛️','10 אימונים חיים','10 אימונים במצב אימון חי',        'liveCount',10, 's','live'),
+    BD('live25',  '🏟️','25 אימונים חיים','25 אימונים במצב אימון חי',        'liveCount',25, 'g','live'),
+    BD('live50',  '🚀','50 אימונים חיים','50 אימונים במצב אימון חי',        'liveCount',50, 'l','live'),
+    BD('liveFull','✅','כל התוכנית',     'אימון חי שהושלם בלי לדלג על אף תרגיל', 'liveFull',1, 's','live'),
+    BD('live45',  '⏱️','45 דקות ומעלה',  'אימון חי של 45 דקות או יותר',      'liveLong',1,   'b','live'),
+    // — התקדמות ושיאים —
+    BD('up1',     '📈','שיפור ראשון',   'שיפור בתרגיל לעומת הפעם הקודמת',  'ups',1,  'b','prog'),
+    BD('up10',    '📊','10 שיפורים',    '10 שיפורים בתרגילים',             'ups',10, 's','prog'),
+    BD('up25',    '🧗','25 שיפורים',    '25 שיפורים בתרגילים',             'ups',25, 'g','prog'),
+    BD('up50',    '🏔️','50 שיפורים',    '50 שיפורים בתרגילים',             'ups',50, 'l','prog'),
+    BD('pr1',     '🥇','שיא אישי ראשון','המשקל הכי גבוה עד היום בתרגיל',    'prCount',1,'s','prog'),
+    BD('pr5',     '🎖️','שיאים ב-5 תרגילים', 'שיא אישי ב-5 תרגילים שונים', 'prEx',5, 'g','prog'),
+    BD('pr10',    '🏆','שיאים ב-10 תרגילים','שיא אישי ב-10 תרגילים שונים','prEx',10,'l','prog'),
+    BD('upDay',   '🌟','יום של שיפורים','3 שיפורים או יותר באימון אחד',     'upsBestDay',3,'g','prog'),
+    BD('double',  '✖️','משקל כפול',     'משקל כפול מהפעם הראשונה בתרגיל',   'doubled',1,'g','prog'),
+    // — כוח וסיבולת —
+    BD('plank60', '🧱','פלאנק של דקה',   'החזקת פלאנק 60 שניות',    'plankSec',60, 'b','power'),
+    BD('plank90', '🪨','פלאנק דקה וחצי','החזקת פלאנק 90 שניות',    'plankSec',90, 's','power'),
+    BD('plank120','⛰️','פלאנק 2 דקות',   'החזקת פלאנק 120 שניות',   'plankSec',120,'g','power'),
+    BD('ton1',    '🏗️','טון באימון אחד', '1,000 ק״ג שהורמו באימון אחד (משקל × חזרות)', 'volBest',1000, 's','power'),
+    BD('ton10',   '🚛','10 טון',         '10,000 ק״ג שהורמו בסך הכול',  'volTotal',10000,  's','power'),
+    BD('ton50',   '🚂','50 טון',         '50,000 ק״ג שהורמו בסך הכול',  'volTotal',50000,  'g','power'),
+    BD('ton100',  '🚀','100 טון',        '100,000 ק״ג שהורמו בסך הכול', 'volTotal',100000, 'l','power'),
+    // — מגוון —
+    BD('ex10',    '🧩','10 תרגילים',     '10 תרגילים שונים במעקב',     'exCount',10, 'b','variety'),
+    BD('ex20',    '🧠','20 תרגילים',     '20 תרגילים שונים במעקב',     'exCount',20, 's','variety'),
+    BD('areas7',  '🗺️','כל הגוף',        'עבודה על כל 7 אזורי הגוף',   'areaCount',7,'g','variety'),
+    BD('types5',  '🎨','5 סוגי אימון',   '5 סוגי אימון שונים',          'typeCount',5,'s','variety'),
+    BD('types10', '🌍','10 סוגי אימון',  '10 סוגי אימון שונים',         'typeCount',10,'l','variety'),
+    BD('mixWeek', '🎭','שבוע מגוון',     'כוח, פילאטיס וריקוד באותו שבוע', 'mixWeek',1,'g','variety'),
+    // — יעד שבועי —
+    BD('weekGoal1', '🎯','יעד שבועי',        'עמידה ביעד אימוני הכוח השבועי',   'strengthWeeks',1,  's','week'),
+    BD('weekGoal4', '📅','4 שבועות ביעד',    '4 שבועות ברצף ביעד הכוח',          'strengthRun',4,   'g','week'),
+    BD('weekGoal12','🗓️','12 שבועות ביעד',   '12 שבועות ברצף ביעד הכוח',         'strengthRun',12,  'l','week'),
+    BD('pilGoal1',  '🌀','יעד פילאטיס',      'עמידה ביעד הפילאטיס השבועי',        'pilatesWeeks',1,  's','week'),
+    BD('listen',    '🤍','הקשבת לגוף',       'אימון מותאם ביום של כאבי שרירים',   'listened',1,      's','week'),
+    // — אימון עם מאמן/ת —
+    BD('coach1',   '👩‍🏫','אימון עם מאמן/ת', 'אימון ראשון עם מאמן/ת',            'trainerCount',1, 'b','coach'),
+    BD('coach5',   '🤝','5 אימונים אישיים','5 אימונים עם מאמן/ת',              'trainerCount',5, 's','coach'),
+    BD('coach10',  '🏅','10 אימונים אישיים','10 אימונים עם מאמן/ת',            'trainerCount',10,'g','coach'),
+    BD('smart1',   '🧠','פירוק חכם',       'אימון ראשון שנכנס מהדבקה, קובץ או צילום', 'smartCount',1, 'b','coach'),
+    BD('newEx10',  '🆕','10 תרגילים חדשים','10 תרגילים חדשים נוספו למעקב',     'customCount',10,'s','coach'),
+    BD('report1',  '📋','דוח ראשון',       'דוח אימונים ראשון למאמן/ת',         'reports',1,      'b','coach'),
+    // — פילאטיס וריקוד —
+    BD('pil1',   '🌀','פילאטיס ראשון',  'אימון פילאטיס ראשון', 'pilatesCount',1, 'b','studio'),
+    BD('pil10',  '🧘','10 פילאטיס',     '10 אימוני פילאטיס',   'pilatesCount',10,'s','studio'),
+    BD('pil25',  '🪷','25 פילאטיס',     '25 אימוני פילאטיס',   'pilatesCount',25,'g','studio'),
+    BD('dance1', '💃','ריקוד ראשון',    'ריקוד או סלסה ראשונים','danceCount',1,  'b','studio'),
+    BD('dance10','🕺','10 ריקודים',     '10 ריקודים או סלסה',   'danceCount',10, 's','studio'),
+    // — משקל —
+    BD('weigh1',  '⚖️','שקילה ראשונה',  'המשקל הראשון שנרשם',     'weighCount',1,  'b','weight'),
+    BD('weigh10', '📉','10 שקילות',     '10 שקילות נרשמו',          'weighCount',10, 's','weight'),
+    BD('weigh30', '📒','30 שקילות',     '30 שקילות נרשמו',          'weighCount',30, 'g','weight'),
+    BD('weighWk4','🗓️','שקילה שבועית', 'שקילה בכל שבוע, 4 שבועות ברצף', 'weighWeekRun',4,'s','weight'),
+    BD('goal1',   '🎯','קילו לכיוון היעד',   'ק״ג אחד לכיוון יעד המשקל',  'goalKg',1, 's','weight'),
+    BD('goal3',   '🏹','3 ק״ג לכיוון היעד',  '3 ק״ג לכיוון יעד המשקל',    'goalKg',3, 'g','weight'),
+    BD('goal5',   '🏆','5 ק״ג לכיוון היעד',  '5 ק״ג לכיוון יעד המשקל',    'goalKg',5, 'l','weight'),
+    // — מים —
+    BD('water1',  '💧','יום ביעד המים',  'יום ראשון שבו הגעת ליעד המים', 'waterDays',1,  'b','water'),
+    BD('water7',  '🚰','7 ימי מים',      '7 ימים ביעד המים',            'waterDays',7,  's','water'),
+    BD('water30', '🌊','30 ימי מים',     '30 ימים ביעד המים',           'waterDays',30, 'g','water'),
+    BD('waterRun','🐬','שבוע מים ברצף',  '7 ימים ברצף ביעד המים',       'waterRun',7,   'g','water'),
+    // — היקפים —
+    BD('meas1',   '📏','מדידה ראשונה',   'מדידת היקפים ראשונה',          'measCount',1,  'b','measure'),
+    BD('meas5',   '📐','5 מדידות',       '5 ימי מדידת היקפים',            'measCount',5,  's','measure'),
+    BD('measMo3', '🗓️','3 חודשים של מדידה','מדידה בכל חודש, 3 חודשים ברצף','measMonthRun',3,'g','measure'),
+    // — חלון אכילה —
+    BD('win1',   '🕐','יום בתוך החלון',  'יום ראשון שבו האכילה נשארה בחלון שנבחר', 'winDays',1, 'b','eatwin'),
+    BD('win7',   '🕰️','7 ימים בחלון',    '7 ימים בתוך חלון האכילה',   'winDays',7,  's','eatwin'),
+    BD('win30',  '⏳','30 ימים בחלון',   '30 ימים בתוך חלון האכילה',  'winDays',30, 'g','eatwin'),
+    BD('winRun', '🌙','שבוע בחלון ברצף', '7 ימים ברצף בתוך החלון',     'winRun',7,   'g','eatwin'),
+    // — האפליקציה —
+    BD('fav10',   '❤️','10 מועדפים',     '10 מזונות נשמרו במועדפים',  'favCount',10,   'b','app'),
+    BD('meal1',   '🍲','ארוחה שמורה',    'ארוחה ראשונה נשמרה לשימוש חוזר', 'mealCount',1,'b','app'),
+    BD('scan1',   '📷','סריקה ראשונה',   'ברקוד ראשון נסרק',          'scanCount',1,    'b','app'),
+    BD('photo1',  '📸','צילום ראשון',    'מזון ראשון שצולם ליומן',     'photoCount',1,   'b','app'),
+    BD('photo30', '🖼️','30 צילומים',     '30 צילומי מזון ביומן',       'photoCount',30,  's','app'),
+    BD('chat1',   '💬','שיחה עם העוזר',  'שיחה ראשונה עם העוזר',       'chatCount',1,    'b','app'),
+    BD('plan1',   '🧭','תוכנית אישית',   'תוכנית אישית ראשונה',        'hasProgram',1,   's','app'),
     // — רמות —
-    { id:'level3',  icon:'🎯', title:'רמה 3',  desc:'הגעת לרמה 3',  test:s=>s.level>=3 },
-    { id:'level5',  icon:'🚀', title:'רמה 5',  desc:'הגעת לרמה 5',  test:s=>s.level>=5 },
-    { id:'level10', icon:'🌟', title:'רמה 10', desc:'הגעת לרמה 10', test:s=>s.level>=10 },
-    { id:'level15', icon:'🌠', title:'רמה 15', desc:'הגעת לרמה 15', test:s=>s.level>=15 },
-    { id:'level20', icon:'🏆', title:'רמה 20', desc:'הגעת לרמה 20', test:s=>s.level>=20 },
-    { id:'level30', icon:'👑', title:'רמה 30', desc:'הגעת לרמה 30', test:s=>s.level>=30 },
-    { id:'level50', icon:'🐲', title:'רמה 50', desc:'הגעת לרמה 50', test:s=>s.level>=50 },
-    // — אבני דרך XP —
-    { id:'xp500',   icon:'💯', title:'500 XP',   desc:'צברת 500 XP',   test:s=>s.xp>=500 },
-    { id:'xp1000',  icon:'🎖️', title:'1000 XP',  desc:'צברת 1000 XP',  test:s=>s.xp>=1000 },
-    { id:'xp5000',  icon:'🏵️', title:'5000 XP',  desc:'צברת 5000 XP',  test:s=>s.xp>=5000 },
-    { id:'xp10000', icon:'🌌', title:'10000 XP', desc:'צברת 10000 XP', test:s=>s.xp>=10000 },
-    // — מיוחדים —
-    { id:'entries50',  icon:'🍽️', title:'50 רישומים',  desc:'50 פריטים נרשמו ביומן',  test:s=>s.foodEntries>=50 },
-    { id:'entries200', icon:'🍱', title:'200 רישומים', desc:'200 פריטים נרשמו ביומן', test:s=>s.foodEntries>=200 },
-    { id:'comeback',   icon:'🫶', title:'חזרת!',       desc:'חזרת לעקוב אחרי הפסקה',   test:s=>s.comeback },
+    BD('level3', '🎯','רמה 3', 'הגעת לרמה 3', 'level',3, 'b','level'),
+    BD('level5', '🚀','רמה 5', 'הגעת לרמה 5', 'level',5, 'b','level'),
+    BD('level10','🌟','רמה 10','הגעת לרמה 10','level',10,'s','level'),
+    BD('level15','🌠','רמה 15','הגעת לרמה 15','level',15,'s','level'),
+    BD('level20','🏆','רמה 20','הגעת לרמה 20','level',20,'g','level'),
+    BD('level30','👑','רמה 30','הגעת לרמה 30','level',30,'g','level'),
+    BD('level50','🐲','רמה 50','הגעת לרמה 50','level',50,'l','level'),
+    BD('xp500',  '💯','500 XP',  'צברת 500 XP',  'xp',500,  'b','level'),
+    BD('xp1000', '🎖️','1000 XP', 'צברת 1000 XP', 'xp',1000, 's','level'),
+    BD('xp5000', '🏵️','5000 XP', 'צברת 5000 XP', 'xp',5000, 'g','level'),
+    BD('xp10000','🌌','10000 XP','צברת 10000 XP','xp',10000,'l','level'),
   ];
+  // The 52 badges that existed before 16.10.2026. Anything not in this list (or in the
+  // last saved snapshot's list) is "new to the app", so earning it on day one is a
+  // catch-up, not 30 celebrations in a row.
+  const BADGES_V1 = 'first track3 track7 track14 track30 track50 track100 track200 track365 streak3 streak7 streak14 streak21 streak30 streak50 streak100 streak200 streak365 workout1 workout5 workout10 workout25 workout50 workout100 balanced1 balanced7 balanced30 balanced100 balancedWeek balancedFort protein7 protein30 carb7 fat7 active1 active7 active30 level3 level5 level10 level15 level20 level30 level50 xp500 xp1000 xp5000 xp10000 entries50 entries200 comeback'.split(' ');
   function xpToReach(L){ return 100*(L-1)*L/2; }       // XP needed to BE level L
   function levelFromXp(xp){ let L=1; while(xpToReach(L+1)<=xp) L++; return L; }
   function computeStreak(set){
@@ -6720,6 +6813,132 @@
     let best=1, cur=1;
     for(let i=1;i<days.length;i++){ cur = (shiftKey(days[i-1],1)===days[i]) ? cur+1 : 1; if(cur>best) best=cur; }
     return best;
+  }
+  // Longest run of consecutive weeks (keys = Monday of each week) / months ('YYYY-MM').
+  function longestWeekRun(set){
+    const ks=[...set].sort(); let best=0, cur=0, prev=null;
+    for(const k of ks){ cur = (prev && shiftKey(prev,7)===k) ? cur+1 : 1; if(cur>best) best=cur; prev=k; }
+    return best;
+  }
+  function longestMonthRun(set){
+    const ks=[...set].sort(); let best=0, cur=0, prev=null;
+    const nextMonth = m=>{ let [y,mo]=m.split('-').map(Number); mo++; if(mo>12){ mo=1; y++; } return y+'-'+String(mo).padStart(2,'0'); };
+    for(const k of ks){ cur = (prev && nextMonth(prev)===k) ? cur+1 : 1; if(cur>best) best=cur; prev=k; }
+    return best;
+  }
+  function weekOf(key){ const d=dateFromKey(key); return shiftKey(key, -((d.getDay()+6)%7)); }
+  // Stats for the badges added on 16.10.2026: the gym engine, weight, water, measurements,
+  // eating window and the rest of the app. Each block is guarded on its own, so one
+  // missing piece (the gym files not loaded, a store not ready yet) can't take the
+  // whole achievements system down with it.
+  function extraStats(){
+    const x = {};
+    const G = window.Gym;
+    const days = Object.keys(allWorkouts||{});
+    try{
+      const S = G && G.state ? G.state() : null;
+      const acts = (S && S.activities) || {}, sess = (S && S.sessions) || {};
+      let liveCount=0, liveFull=0, liveLong=0, listened=0, trainerCount=0, smartCount=0, pilatesCount=0, danceCount=0;
+      const types=new Set(), weeks={};
+      for(const day of days){
+        for(const w of (allWorkouts[day]||[])){
+          if(!w) continue;
+          const act=acts[w.id], meta=sess[w.id];
+          if(w.type) types.add(w.type);
+          const isPil = (act && act.kind==='pilates') || w.type==='pilates';
+          const isDance = (act && act.kind==='salsa') || w.type==='dance';
+          const isStr = !isPil && !isDance && !!(G && G.isStrength && G.isStrength(w));
+          if(isPil) pilatesCount++;
+          if(isDance) danceCount++;
+          const wk = weekOf(day); const W = weeks[wk] || (weeks[wk] = { s:0, p:0, d:0 });
+          if(isStr) W.s++; if(isPil) W.p++; if(isDance) W.d++;
+          if(!meta) continue;
+          if(meta.verdicts){                                   // saved by the live-workout flow
+            liveCount++;
+            const left = (meta.skipped||[]).length + (meta.cut||[]).length + (meta.deferred||[]).length;
+            if(!left) liveFull++;
+            if((+meta.durationMin||0) >= 45) liveLong++;
+            if((+meta.soreness||0) >= 4) listened++;
+          }
+          if(meta.trainer) trainerCount++;
+          if(meta.smart || (meta.trainer && !meta.imported)) smartCount++;
+        }
+      }
+      const prefs = (S && S.prefs) || {};
+      const sT = +prefs.strengthTarget || 4, pT = +prefs.pilatesTarget || 0;
+      const strWeeks = new Set(Object.keys(weeks).filter(k=> weeks[k].s >= sT));
+      Object.assign(x, { liveCount, liveFull, liveLong, listened, trainerCount, smartCount, pilatesCount, danceCount,
+        typeCount: types.size,
+        mixWeek: Object.values(weeks).some(W=> W.s>0 && W.p>0 && W.d>0) ? 1 : 0,
+        strengthWeeks: strWeeks.size, strengthRun: longestWeekRun(strWeeks),
+        pilatesWeeks: pT>0 ? Object.values(weeks).filter(W=> W.p >= pT).length : 0,
+        customCount: (S && Array.isArray(S.custom)) ? S.custom.length : 0,
+        reports: S ? (+S.reports||0) : 0 });
+    }catch(_){}
+    try{
+      if(G && G.history && G.evaluate && G.entryStats){
+        const h = G.history().slice().reverse();            // oldest first
+        const byEx = {}, perWo = {}, exSet = new Set(), areas = new Set();
+        let ups=0, prCount=0, doubled=0, plankSec=0, volTotal=0;
+        const prEx = new Set();
+        for(const r of h){
+          const st = G.entryStats(r);
+          volTotal += st.volume;
+          perWo[r.woId] = perWo[r.woId] || { vol:0, ups:0 }; perWo[r.woId].vol += st.volume;
+          if(/פלאנק|plank/i.test((r.exId||'') + ' ' + (r.name||''))) plankSec = Math.max(plankSec, st.bestSec);
+          exSet.add(r.exId || String(r.name||'').trim().toLowerCase());
+          if(!r.exId) continue;
+          const e = G.ex && G.ex(r.exId); if(e && e.area) areas.add(e.area);
+          const b = byEx[r.exId] || (byEx[r.exId] = { prev:null, max:0, first:0 });
+          if(b.prev){
+            if(G.evaluate(r.exId, r, b.prev).kind === 'up'){ ups++; perWo[r.woId].ups++; }
+            if(st.top > 0 && b.max > 0 && st.top > b.max){ prCount++; prEx.add(r.exId); }
+          } else b.first = st.top;
+          if(b.first > 0 && st.top >= b.first*2) doubled = 1;
+          b.max = Math.max(b.max, st.top); b.prev = r;
+        }
+        const wos = Object.values(perWo);
+        Object.assign(x, { ups, prCount, prEx: prEx.size, doubled, plankSec, volTotal: Math.round(volTotal),
+          volBest: Math.round(Math.max(0, ...wos.map(w=> w.vol))), upsBestDay: Math.max(0, ...wos.map(w=> w.ups)),
+          exCount: exSet.size, areaCount: areas.size });
+      }
+    }catch(_){}
+    try{
+      const wl = Array.isArray(weightLog) ? weightLog.filter(w=> w && w.day && +w.kg>0) : [];
+      x.weighCount = wl.length;
+      x.weighWeekRun = longestWeekRun(new Set(wl.map(w=> weekOf(w.day))));
+      const goal = (program && +program.goalWeight>0) ? +program.goalWeight : null;
+      const start = (program && +program.startWeight>0) ? +program.startWeight : (wl[0] ? +wl[0].kg : null);
+      const last = wl.length ? +wl[wl.length-1].kg : null;
+      if(goal!=null && start!=null && last!=null && goal !== start){
+        const moved = goal < start ? start - last : last - start;   // toward the goal, in either direction
+        x.goalKg = Math.max(0, Math.round(moved*10)/10);
+      }
+    }catch(_){}
+    try{
+      const tgt = waterTargetCups();
+      const wd = new Set(Object.keys(waterLog||{}).filter(k=> tgt>0 && waterForDay(k) >= tgt));
+      x.waterDays = wd.size; x.waterRun = longestRun(wd);
+    }catch(_){}
+    try{
+      const ml = Array.isArray(measureLog) ? measureLog : [];
+      x.measCount = ml.length;
+      x.measMonthRun = longestMonthRun(new Set(ml.filter(r=> r && r.day).map(r=> r.day.slice(0,7))));
+    }catch(_){}
+    try{
+      const t = +eatWin.target || 0;
+      if(t > 0){
+        const ok = new Set(Object.keys(allLogs||{}).filter(k=>{ const w=dayEatWindow(k); return w.mins!=null && w.mins >= EATWIN_MIN_REAL && w.mins <= t*60; }));
+        x.winDays = ok.size; x.winRun = longestRun(ok);
+      }
+    }catch(_){}
+    try{ x.favCount = Array.isArray(favs) ? favs.length : 0; }catch(_){}
+    try{ x.mealCount = Array.isArray(mealTpls) ? mealTpls.length : 0; }catch(_){}
+    try{ x.scanCount = bcCache ? Object.keys(bcCache).length : 0; }catch(_){}
+    try{ x.photoCount = photoLog ? Object.keys(photoLog).length : 0; }catch(_){}
+    try{ x.chatCount = Array.isArray(chatSessions) ? chatSessions.length : 0; }catch(_){}
+    try{ x.hasProgram = program ? 1 : 0; }catch(_){}
+    return x;
   }
   function computeGamification(){
     const days = new Set([...Object.keys(allLogs), ...Object.keys(allWorkouts)]);
@@ -6753,9 +6972,9 @@
     const tdays=[...tracked].sort();
     let comeback=false;
     for(let i=1;i<tdays.length;i++){ if((new Date(tdays[i])-new Date(tdays[i-1]))/86400000 >= 8){ comeback=true; break; } }
-    const stats = { xp, level, streak, workoutCount, proteinDays, carbDays, fatDays,
+    const stats = Object.assign(extraStats(), { xp, level, streak, workoutCount, proteinDays, carbDays, fatDays,
       balancedDays, activeDays, foodEntries, balancedRun:longestRun(balanced),
-      tracked:tracked.size, perfect:balancedDays, comeback };
+      tracked:tracked.size, perfect:balancedDays, comeback: comeback ? 1 : 0 });
     stats.badges = BADGES.filter(b => b.test && b.test(stats)).map(b => b.id);
     return stats;
   }
@@ -6830,22 +7049,42 @@
       </div>`;
     }
     // Celebrations — only AFTER the first render, so the boot recompute never spams.
+    // The one exception is the catch-up: badges that are new to the APP (not in the last
+    // snapshot's list of definitions) and already earned get one summary screen, even on
+    // boot, instead of either silence or thirty screens in a row.
     const prev=load(LS.gam, null);
-    if(gamReady && prev){
-      if(g.xp > (prev.xp||0)) floatXP(g.xp - (prev.xp||0));           // "+N XP" floats up
-      if(g.level > (prev.level||1)){                                  // level up → confetti
-        const lb=$('lvlBadge'); if(lb){ lb.classList.add('level-pop'); setTimeout(()=>lb.classList.remove('level-pop'),650); }
-        const dl=$('deskLvl'); if(dl){ dl.classList.add('level-pop'); setTimeout(()=>dl.classList.remove('level-pop'),650); }
-        burstConfetti(); showToast('🎉 עלית לרמה '+g.level+'! ממשיכים ככה 💪');
-      }
-      const fresh=g.badges.filter(b=> !(prev.badges||[]).includes(b));
-      if(fresh.length){                                              // new achievement → confetti
-        const def=BADGES.find(x=>x.id===fresh[fresh.length-1]);
-        if(def){ burstConfetti(); showToast('🎉 הישג חדש: '+def.icon+' '+def.title); }
+    const items=[];
+    if(prev){
+      const known=new Set(Array.isArray(prev.defs) ? prev.defs : BADGES_V1);
+      const had=new Set(prev.badges||[]);
+      const fresh=g.badges.filter(b=> !had.has(b));
+      const catchUp=fresh.filter(b=> !known.has(b)).map(id=> BADGES.find(x=>x.id===id)).filter(Boolean);
+      if(catchUp.length) items.push({ icon:'🎁', tier:topTier(catchUp), label:'הישגים חדשים באפליקציה',
+        title: catchUp.length===1 ? 'כבר השגת הישג חדש' : 'כבר השגת '+catchUp.length+' מההישגים החדשים',
+        desc:'נוספו לאפליקציה הישגים חדשים, ועל מה שכבר עשית מגיע לך קרדיט עכשיו.', icons:catchUp.map(b=>b.icon), cheer:'מכאן נחגוג כל הישג ברגע שהוא קורה 🎉' });
+      if(gamReady){
+        if(g.xp > (prev.xp||0)) floatXP(g.xp - (prev.xp||0));           // "+N XP" floats up
+        if(g.level > (prev.level||1)){                                  // level up
+          const lb=$('lvlBadge'); if(lb){ lb.classList.add('level-pop'); setTimeout(()=>lb.classList.remove('level-pop'),650); }
+          const dl=$('deskLvl'); if(dl){ dl.classList.add('level-pop'); setTimeout(()=>dl.classList.remove('level-pop'),650); }
+          items.unshift({ icon:'⬆️', tier: g.level%10===0 ? 'l' : 'g', label:'עלייה ברמה', title:'עלית לרמה '+g.level+'!', desc:'כל רישום, אימון ויום מאוזן מצטברים לכאן.', cheer:'ממשיכים ככה 💪' });
+        }
+        const real=fresh.filter(b=> known.has(b)).map(id=> BADGES.find(x=>x.id===id)).filter(Boolean);
+        // A handful arriving together (data loaded from the cloud, a big import) becomes
+        // one screen; one to three each get their own moment.
+        if(real.length > 3) items.push({ icon:'🏆', tier:topTier(real), label:'הישגים חדשים', title:real.length+' הישגים חדשים נפתחו', desc:real.map(b=>b.title).slice(0,6).join(' · ')+(real.length>6?' ועוד':''), icons:real.map(b=>b.icon) });
+        else real.forEach(b=> items.push({ icon:b.icon, tier:b.tier, title:b.title, desc:b.desc }));
       }
     }
-    save(LS.gam, { xp:g.xp, level:g.level, streak:g.streak, badges:g.badges });
+    if(items.length) setTimeout(()=> celebrateItems(items), 350);   // let the sheet that triggered it close first
+    save(LS.gam, { xp:g.xp, level:g.level, streak:g.streak, badges:g.badges, defs:BADGES.map(b=>b.id) });
     gamReady=true;
+  }
+  const TIER_RANK={ b:1, s:2, g:3, l:4 };
+  function topTier(list){ return list.reduce((t,b)=> (TIER_RANK[b.tier]||1) > (TIER_RANK[t]||1) ? b.tier : t, 'b'); }
+  function celebrateItems(items){
+    if(window.Celebrate && Celebrate.show) Celebrate.show(items);
+    else { burstConfetti(); showToast('🎉 '+items[items.length-1].title); }
   }
   function openAch(){
     const g=lastGam||computeGamification();
@@ -6857,17 +7096,47 @@
         <div class="text-[11px] text-gray-400 mb-2">${g.xp} XP · 🔥 רצף ${g.streak} ימים</div>
         <div class="h-2 rounded-full bg-gray-800 overflow-hidden mb-1"><div class="h-full bg-gradient-to-l from-emerald-400 to-cyan-400" style="width:${pct}%"></div></div>
         <div class="text-[10px] text-gray-500">${g.workoutCount} אימונים · ${g.balancedDays} ימים מאוזנים · ${g.tracked} ימי מעקב</div>
+        <div class="text-[11px] font-black text-gray-200 mt-2">🏆 ${g.badges.length} מתוך ${BADGES.length} הישגים</div>
+        <button id="achSound" class="mt-2 text-[11px] font-bold rounded-lg px-3 py-1 border border-line input-dark text-gray-300">${achSoundOn()?'🔔 צליל בחגיגה: פועל':'🔕 צליל בחגיגה: מושתק'}</button>
       </div>`;
-    $('achGrid').innerHTML=BADGES.map(b=>{
-      const on=g.badges.includes(b.id);
-      return `<div class="glass rounded-xl p-3 text-center ${on?'':'opacity-40 grayscale'}">
-        <div class="text-2xl mb-1 ${on?'':'blur-[1px]'}">${on?b.icon:'🔒'}</div>
-        <div class="text-[11px] font-black text-gray-100">${b.title}</div>
+    const sb=$('achSound');
+    if(sb) sb.onclick=()=>{ if(window.Celebrate){ Celebrate.setSound(!achSoundOn()); } openAch(); };
+    const has=new Set(g.badges);
+    const val=b=> Math.min(b.n, Math.max(0, +g[b.key]||0));
+    const fmt=n=> (+n).toLocaleString('he-IL',{maximumFractionDigits:1});
+    const TC={ b:'#c98a50', s:'#aab4c6', g:'#ffc24b', l:'#c6ff00' };
+    const card=b=>{
+      const on=has.has(b.id), cur=val(b), pct=Math.round(cur/b.n*100);
+      const tc=TC[b.tier]||TC.b;
+      return `<div class="glass rounded-xl p-3 text-center" data-bid="${b.id}" style="border:1px solid ${on?tc+'88':'transparent'};${on?'cursor:pointer':''}">
+        <div class="text-2xl mb-1" style="${on?'':'filter:grayscale(1);opacity:.35'}">${b.icon}</div>
+        <div class="text-[11px] font-black text-gray-100" style="${on?'':'opacity:.6'}">${b.title}</div>
         <div class="text-[9px] text-gray-500 leading-snug mt-0.5">${b.desc}</div>
+        ${on ? `<div class="text-[9px] font-black mt-1" style="color:${tc}">${window.Celebrate?Celebrate.tierName(b.tier):''} ✓</div>`
+             : (b.n>1 ? `<div style="height:4px;border-radius:9px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${tc}"></div></div>
+                <div class="text-[9px] text-gray-500 mt-0.5">${fmt(cur)} מתוך ${fmt(b.n)}</div>` : '')}
       </div>`;
-    }).join('');
+    };
+    // "Next up": the locked badges closest to done (already started), so there's always
+    // a near goal on screen.
+    const near=BADGES.filter(b=> !has.has(b.id) && b.n>1 && val(b)>0).sort((a,b)=> val(b)/b.n - val(a)/a.n).slice(0,4);
+    let h='';
+    if(near.length) h+=`<div style="grid-column:1/-1" class="text-[12px] font-black text-gray-200 mt-1">🎯 הבא בתור</div>`+near.map(card).join('');
+    BADGE_CATS.forEach(([cat,label])=>{
+      const list=BADGES.filter(b=> b.cat===cat); if(!list.length) return;
+      const got=list.filter(b=> has.has(b.id)).length;
+      h+=`<div style="grid-column:1/-1" class="flex items-baseline justify-between mt-3"><span class="text-[12px] font-black text-gray-200">${label}</span><span class="text-[10px] font-bold text-gray-500">${got}/${list.length}</span></div>`;
+      h+=list.slice().sort((a,b)=> (has.has(b.id)?1:0)-(has.has(a.id)?1:0)).map(card).join('');
+    });
+    $('achGrid').innerHTML=h;
+    // Tapping an earned badge replays its moment.
+    $('achGrid').querySelectorAll('[data-bid]').forEach(el=>{
+      const b=BADGES.find(x=>x.id===el.dataset.bid);
+      if(b && has.has(b.id)) el.onclick=()=> celebrateItems([{ icon:b.icon, tier:b.tier, title:b.title, desc:b.desc, label:'הישג שלך · '+(window.Celebrate?Celebrate.tierName(b.tier):'') }]);
+    });
     $('achModal').classList.remove('hidden'); $('achModal').classList.add('flex');
   }
+  function achSoundOn(){ return window.Celebrate ? Celebrate.soundOn() : true; }
   function closeAch(){ $('achModal').classList.add('hidden'); $('achModal').classList.remove('flex'); }
   $('rankStrip').onclick = openAch;
   $('achClose').onclick = closeAch;

@@ -255,13 +255,18 @@
           if(r.date && r.date <= B().todayKey()) draft.day = r.date;
           if(!draft.note || draft.note === 'Full Body') draft.note = (r.title || draft.note || 'Full Body') + (r.notes ? ' · ' + r.notes : '');
         }
-        sp.open = false; sp.text = ''; sp.img = null;
+        sp.open = false; sp.text = ''; sp.img = null; sp.used = true;
         const n = fresh.length;
         B().showToast(n === 0 ? 'כל התרגילים כבר מופיעים באימון' : (n === 1 ? 'פורק לתרגיל אחד' : 'פורק ל-' + n + ' תרגילים') + ' ✓ אפשר לבדוק ולתקן לפני שמירה');
         rerender();
       };
       m.querySelector('#edSave').onclick = ()=>{
         collect(m);
+        if(sp.open && !sp.busy && (String(sp.text||'').trim() || sp.img)){
+          B().showToast('קודם מפרקים את מה שהודבק. אחרי הבדיקה לוחצים שוב על שמירה');
+          const go = m.querySelector('#spGo'); if(go) go.click();
+          return;
+        }
         // New exercises from a trainer's plan join the library (and so the tracking and
         // the rotation) before the workout is saved, so their sets count from day one.
         const filled = e=> (e.sets||[]).some(s=> +s.reps > 0 || +s.sec > 0 || +s.kg > 0);
@@ -301,7 +306,7 @@
           const w = { id: b.uid(), type:'gym', level:'mid', minutes: draft.minutes, kcal: draft.minutes ? b.estKcal('gym','mid',draft.minutes) : 0, kcalNet: draft.minutes ? b.estKcalNet('gym','mid',draft.minutes) : 0, note: draft.note || 'Full Body', exercises };
           b.addWorkout(w, draft.day);
           S().sessions[w.id] = eopts.trainer ? { day: draft.day, trainer:true, title: draft.note || 'אימון עם ' + coachWord(), source: eopts.source || '', at: Date.now() }
-                                             : { day: draft.day, manual:true, at: Date.now() };
+                                             : Object.assign({ day: draft.day, manual:true, at: Date.now() }, sp.used ? { smart:true } : {});
           G.save();
         }
         const added = draft.ex.filter(e=> e.isNew && e.exId).length;
@@ -346,7 +351,7 @@
     const r = await fetch('/api/gemini', { method:'POST', headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ mode:'trainerPlan', desc: text || '', mimeType: img && img.mimeType, data: img && img.data, lib, today: B().todayKey() }) });
     const j = await r.json().catch(()=> ({}));
-    if(!r.ok || !Array.isArray(j.exercises)) throw new Error(r.status ? 'server' : 'net');
+    if(!r.ok || !Array.isArray(j.exercises)) throw new Error(r.status ? 'server:' + r.status : 'net');
     if(!j.exercises.length) throw new Error('empty');
     const ex = j.exercises.map(e=>{
       const known = e.match && G.ex(e.match) ? e.match : (G.matchId(e.name) || (e.en ? G.matchId(e.en) : null));
@@ -357,7 +362,12 @@
     });
     return { date: j.date || '', title: j.title || '', notes: j.notes || '', ex };
   }
-  const parseErr = e=>{ const m = String(e && e.message); return m === 'empty' ? 'לא מצאתי תרגילים בטקסט. אפשר לנסות שוב, או להוסיף ידנית.' : m === 'server' ? 'שירות הפענוח לא הצליח כרגע. אפשר לנסות שוב בעוד רגע.' : 'הפענוח נכשל. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.'; };
+  const parseErr = e=>{
+    const m = String(e && e.message);
+    if(m === 'empty') return 'לא מצאתי תרגילים בטקסט. אפשר לנסות שוב, או להוסיף ידנית.';
+    if(m.indexOf('server') === 0) return 'שירות הפענוח לא הצליח כרגע (קוד ' + (m.split(':')[1] || '?') + '). אפשר לנסות שוב בעוד רגע.';
+    return 'הפענוח נכשל. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.';
+  };
   G.parsePlan = parsePlan;
   G.openTrainerImport = function(){
     const st = { text:'', img:null, imgUrl:'', day: B().todayKey(), minutes: 60, busy:false, err:'' };
@@ -656,10 +666,10 @@
       sheet('📋 דוח למאמנת', h, (m)=>{
         m.querySelectorAll('[data-mode]').forEach(b=> b.onclick = ()=>{ mode = b.dataset.mode; if(mode === 'custom'){ const rr = range(); from = rr.from; to = rr.to; } open(); });
         ['#crFrom','#crTo'].forEach(s=>{ const i = m.querySelector(s); if(i) i.onchange = ()=>{ from = m.querySelector('#crFrom').value; to = m.querySelector('#crTo').value; open(); }; });
-        m.querySelector('#crPrint').onclick = ()=> B().printHTML(printWrap('דוח אימונים למאמנת', coachHTML(c)));
-        m.querySelector('#crCopy').onclick = ()=> copy(coachText(c));
-        m.querySelector('#crCsv').onclick = ()=> B().downloadFile('munch-move-coach-' + r.from + '_' + r.to + '.csv', csvRows(r.from, r.to), 'text/csv');
-        m.querySelector('#crShare').onclick = ()=>{ const txt = coachText(c); if(navigator.share) navigator.share({ title:'דוח אימונים', text: txt }).catch(()=>{}); else copy(txt); };
+        m.querySelector('#crPrint').onclick = ()=>{ G.markReport && G.markReport(); B().printHTML(printWrap('דוח אימונים למאמנת', coachHTML(c))); };
+        m.querySelector('#crCopy').onclick = ()=>{ G.markReport && G.markReport(); copy(coachText(c)); };
+        m.querySelector('#crCsv').onclick = ()=>{ G.markReport && G.markReport(); B().downloadFile('munch-move-coach-' + r.from + '_' + r.to + '.csv', csvRows(r.from, r.to), 'text/csv'); };
+        m.querySelector('#crShare').onclick = ()=>{ G.markReport && G.markReport(); const txt = coachText(c); if(navigator.share) navigator.share({ title:'דוח אימונים', text: txt }).catch(()=>{}); else copy(txt); };
       }, 'gyCoach');
     }
     open();

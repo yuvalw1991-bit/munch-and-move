@@ -3,6 +3,10 @@
 
 const MODEL = 'gemini-2.5-flash';
 
+// A long pasted workout (15+ exercises) takes ~9s to parse; the default 10s limit
+// would cut it off mid-answer.
+export const config = { maxDuration: 60 };
+
 const SYS_PROMPT =
   'אתה מומחה תזונה שמעריך ערכים תזונתיים. עבור כל מאכל או מנה שתקבל — בטקסט או בתמונה — ' +
   'החזר הערכה מספרית מציאותית של חלבון, פחמימות ושומן בגרמים. ' +
