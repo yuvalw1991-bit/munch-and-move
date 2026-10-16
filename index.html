@@ -453,7 +453,7 @@
       <!-- Minutes + free-text -->
       <div class="flex gap-2 mb-2">
         <input id="woMinutes" type="number" inputmode="decimal" placeholder="דקות" class="input-dark in-g w-24 border border-line rounded-xl px-3 py-2.5 text-sm text-center font-bold text-gray-100 placeholder-gray-600 outline-none">
-        <textarea id="woNote" rows="1" placeholder="תיאור חופשי (אופציונלי) — ריצה 5 ק״מ בפארק, או הדבקה של אימון שלם" class="input-dark in-g w-full flex-1 border border-line rounded-xl px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none" style="resize:vertical;min-height:44px;line-height:1.5"></textarea>
+        <textarea id="woNote" rows="2" placeholder="תיאור, או הדבקת אימון שלם" class="input-dark in-g w-full flex-1 border border-line rounded-xl px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none" style="resize:none;min-height:44px;line-height:1.5"></textarea>
       </div>
       <button id="woSmartBtn" class="hidden w-full btn-neon text-white rounded-xl py-2.5 mb-2 text-[13px] font-black active:scale-95 transition">🧠 פירוק חכם לתרגילים, סטים ומשקלים</button>
       <!-- Strength logging: exercises → sets (reps × weight). Optional, collapsed by default. -->
@@ -4255,8 +4255,9 @@
   // split: exercises, sets, weights and difficulty — instead of a one-line calorie note.
   function paintWoSmart(){
     const t = $('woNote').value, el = $('woNote');
-    el.style.height = 'auto'; el.style.height = Math.min(260, Math.max(44, el.scrollHeight + 2)) + 'px';
-    const looks = /\n/.test(t.trim()) || /\d\s*[x×*]\s*\d|\d+\s*(ק"ג|ק״ג|קג|kg)|חזר|סט/i.test(t);
+    if(!t){ el.style.height = ''; } // empty: back to the natural two rows
+    else { el.style.height = 'auto'; el.style.height = Math.min(260, Math.max(44, el.scrollHeight + 2)) + 'px'; }
+    const looks = /\n/.test(t.trim()) || /\d\s*[x×*]\s*\d|\d+\s*(ק"ג|ק״ג|קג|kg)|\d\s*(חזר|סט)|סט\s*\d/i.test(t);
     $('woSmartBtn').classList.toggle('hidden', !(looks && window.Gym && Gym.openEditor));
   }
   $('woSmartBtn').onclick = ()=>{
@@ -4835,6 +4836,7 @@
           }
         }
         if($('woTools')) $('woTools').open = true;     // the manual logger is folded under the live mode
+        try{ paintWoSmart(); }catch(_){}               // size the field once it is visible
         $('woMinutes').scrollIntoView({ behavior:'smooth', block:'center' });
         showToast('הפרטים מולאו מהתוכנית — אפשר לשנות ולרשום ✓');
       };
