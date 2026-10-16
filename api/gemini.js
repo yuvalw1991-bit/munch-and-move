@@ -135,7 +135,7 @@ const TRAINER_SCHEMA = {
             type: 'array',
             items: {
               type: 'object',
-              properties: { kg: { type: 'number' }, reps: { type: 'number' }, seconds: { type: 'number' } },
+              properties: { kg: { type: 'number' }, reps: { type: 'number' }, seconds: { type: 'number' }, rpe: { type: 'number', description: 'difficulty 1-10 if written' } },
             },
           },
         },
@@ -397,11 +397,15 @@ export default async function handler(req, res) {
     const today = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.today) || '')) ? body.today : '';
     const libTxt = lib.map((e) => String(e.id || '').slice(0, 40) + ' = ' + String(e.he || '').slice(0, 60) + (e.en ? ' / ' + String(e.en).slice(0, 60) : '')).join('\n');
     const prompt =
-      'לפניך תוכנית של אימון כוח שמאמנת שלחה (טקסט מוואטסאפ ו/או צילום מסך). חלץ כל תרגיל עם הסטים שלו.\n' +
+      'לפניך תוכנית או רישום של אימון כוח (הודעה מוואטסאפ, קובץ טקסט, הערות חופשיות ו/או צילום מסך). חלץ כל תרגיל עם הסטים שלו.\n' +
       'כללים: "12 חז 2 סטים" = שני סטים של 12 חזרות. "15 ק״ג" = kg 15. זמן כמו "1:33" או "1.03" בפלאנק = שניות (93, 63) ו-kind=time. ' +
       'כשסטים שונים זה מזה — סט נפרד לכל אחד. "10 חז כל צד" = perSide true. בלי משקל = kg 0. ' +
       'חימום, הליכה ושחרור אינם תרגילים — אל תכלול אותם. סופר סט: כל תרגיל בנפרד, והערה "סופר סט". ' +
       'הערות כמו מכשיר, תנוחה, מנוחה או "5 שניות סטטי" — לשדה note. ' +
+      'קושי ("קושי 7", "RPE 6.5", "בערך 7", "קושי 7.5 בשניהם") — לשדה rpe בכל סט שהוא חל עליו; אם לא כתוב קושי, השאר ריק. ' +
+      'אם יש כמה ימים בטקסט, קח רק את האימון הראשון. ' +
+      'משקל שנכתב פעם אחת לתרגיל חל על כל הסטים שלו, גם כשהסטים מפורטים אחד-אחד ("9 קג סט ראשון 12, סט שני 12" = שני סטים של 9 ק״ג × 12). אל תבלבל בין מספר חזרות למשקל. ' +
+      'קושי שנכתב פעם אחת בסוף השורה חל על כל הסטים באותה שורה, גם בתרגיל זמן (פלאנק). ' +
       'match: המזהה מרשימת המאגר כשמדובר באותו תרגיל (גם בניסוח אחר, למשל "לחיצות רגליים במכונה" = leg_press, "היפטראס" = hip_thrust, "משיכה/חתירה במכונה סלקטור" = selector_row). ' +
       'תרגיל שלא ברשימה — match ריק, name בעברית, en באנגלית, ו-area לפי השריר העיקרי. ' +
       'date: התאריך שמופיע בתוכנית בפורמט YYYY-MM-DD' + (today ? ' (היום ' + today + '; שנה בשתי ספרות היא 20XX)' : '') + ', ריק אם אין. ' +
@@ -438,7 +442,8 @@ export default async function handler(req, res) {
         kind: e.kind === 'time' ? 'time' : 'reps',
         perSide: !!e.perSide,
         note: String(e.note || '').trim().slice(0, 160),
-        sets: (Array.isArray(e.sets) ? e.sets : []).slice(0, 10).map((x) => ({ kg: num(x.kg), reps: Math.round(num(x.reps)), seconds: Math.round(num(x.seconds)) }))
+        sets: (Array.isArray(e.sets) ? e.sets : []).slice(0, 10).map((x) => ({ kg: num(x.kg), reps: Math.round(num(x.reps)), seconds: Math.round(num(x.seconds)),
+          rpe: (Number(x.rpe) >= 1 && Number(x.rpe) <= 10) ? Math.round(Number(x.rpe) * 2) / 2 : 0 }))
           .filter((x) => x.reps > 0 || x.seconds > 0 || x.kg > 0),
       })).filter((e) => e.name && e.sets.length).slice(0, 25);
       return res.status(200).json({

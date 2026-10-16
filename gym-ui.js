@@ -64,6 +64,7 @@
   `;
   function injectCss(){ if(document.getElementById('gyCss')) return; const st = document.createElement('style'); st.id = 'gyCss'; st.textContent = css; document.head.appendChild(st); }
   G.esc = esc; G.clock = clock; G.dshort = dshort;
+  G.injectCss = injectCss;
 
   // ---------- Workouts tab: home ----------
   // Rendered only while the workouts tab is on screen; a hidden tab is redrawn the

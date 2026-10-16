@@ -13,6 +13,7 @@
 
   // ---------- sheet helper ----------
   function sheet(title, html, bindFn, id){
+    if(G.injectCss) G.injectCss();            // styles exist even if the workouts tab was never opened
     id = id || ('gys' + Math.random().toString(36).slice(2,7));
     let m = document.getElementById(id);
     if(!m){ m = document.createElement('div'); m.id = id; m.className = 'gy-modal'; document.body.appendChild(m); }
@@ -152,6 +153,8 @@
     const orig = woId ? (all[day]||[]).find(w=> w.id === woId) : null;
     const lib = G.lib();
     const pre = eopts.prefill || null;
+    const isTrainer = !!(eopts.trainer || (orig && (S().sessions[orig.id] || {}).trainer));
+    const TOK = 'e' + Math.random().toString(36).slice(2);   // this editor instance
     const draft = pre ? { day: pre.day || day, minutes: pre.minutes || 60, note: pre.note || 'אימון עם ' + coachWord(), ex: pre.ex } : {
       day, minutes: orig ? (orig.minutes || 0) : 55, note: orig ? (orig.note || '') : 'Full Body',
       // Keep each entry's own name and id; the library match is only a default for the
@@ -159,8 +162,19 @@
       ex: orig ? (orig.exercises||[]).map(e=> ({ exId: e.exId || G.matchId(e.name) || '', orig: e, name: e.name, note: e.note || '', sets: (e.sets||[]).map(s=> Object.assign({}, s)) })) : [],
     };
     const opts = sel=> '<option value="">— אחר —</option>' + lib.map(x=> '<option value="' + x.id + '"' + (x.id===sel?' selected':'') + '>' + esc(x.he) + (x.active?'':' (לא פעיל)') + '</option>').join('');
+    const sp = { open: !orig && !pre, text:'', img:null, busy:false, err:'' };
+    function smartBox(){
+      if(!sp.open) return '<button class="gy-btn gy-chip mb-3" id="spOpen">🧠 פירוק חכם: הדבקת אימון שלם</button>';
+      return '<div class="gy-card mb-3" style="padding:12px"><div class="font-black text-gray-100 mb-1">🧠 פירוק חכם</div>' +
+        '<div class="text-[11px] gy-mut mb-2">מדביקים כאן את כל האימון, מעלים קובץ טקסט או צילום מסך, והמערכת מחלקת אותו לתרגילים, סטים, משקלים וקושי.</div>' +
+        '<textarea id="spText" class="gy-in" style="min-height:120px;line-height:1.6" placeholder="למשל:\nלחיצת רגליים 20 ק״ג 2×15 קושי 6.5\nפולי עליון 41 ק״ג 2×12 קושי 6.5\nפלאנק 50 שנ׳ + 50 שנ׳">' + esc(sp.text) + '</textarea>' +
+        '<div class="gy-row mt-2"><label class="gy-btn gy-chip" style="cursor:pointer">📄 קובץ טקסט / צילום<input id="spFile" type="file" accept=".txt,.md,text/plain,image/*" style="display:none"></label>' +
+          (sp.img ? '<span class="text-[11px] gy-mut">✓ תמונה צורפה</span><button class="gy-btn gy-chip" id="spImgX">✕</button>' : '') + '</div>' +
+        (sp.err ? '<div class="gy-card gy-danger mt-2" style="padding:8px;font-size:12px">' + esc(sp.err) + '</div>' : '') +
+        '<button id="spGo" class="gy-btn gy-pri mt-3" style="height:46px;width:100%"' + (sp.busy ? ' disabled' : '') + '>' + (sp.busy ? '⏳ מפרקים את האימון…' : 'לפרק לתרגילים') + '</button></div>';
+    }
     function html(){
-      let h = '<div class="gy-grid2"><label><div class="gy-lbl mb-1">תאריך</div><input class="gy-in" type="date" id="edDay" value="' + draft.day + '" max="' + B().todayKey() + '"></label>' +
+      let h = smartBox() + '<div class="gy-grid2"><label><div class="gy-lbl mb-1">תאריך</div><input class="gy-in" type="date" id="edDay" value="' + draft.day + '" max="' + B().todayKey() + '"></label>' +
         '<label><div class="gy-lbl mb-1">דקות</div><input class="gy-in" type="number" inputmode="numeric" id="edMin" value="' + draft.minutes + '"></label></div>' +
         '<label class="block mt-2"><div class="gy-lbl mb-1">כותרת / הערה</div><input class="gy-in" id="edNote" value="' + esc(draft.note) + '"></label>';
       draft.ex.forEach((e, i)=>{
@@ -188,6 +202,7 @@
       m.querySelectorAll('[data-exnote]').forEach(inp=>{ draft.ex[+inp.dataset.exnote].note = inp.value; });
       m.querySelectorAll('[data-exarea]').forEach(sel=>{ draft.ex[+sel.dataset.exarea].area = sel.value; });
       m.querySelectorAll('[data-exrot]').forEach(cb=>{ draft.ex[+cb.dataset.exrot].rotation = cb.checked; });
+      const spT = m.querySelector('#spText'); if(spT) sp.text = spT.value;
     }
     function bind(m, close){
       const rerender = ()=>{ m.querySelector('.gy-sheet').lastElementChild && null; m.remove(); open(); };
@@ -196,6 +211,55 @@
       m.querySelectorAll('[data-addset]').forEach(b=> b.onclick = ()=>{ collect(m); const e = draft.ex[+b.dataset.addset]; const last = e.sets[e.sets.length-1]; e.sets.push(last ? Object.assign({}, last) : { kg:0, reps:10 }); rerender(); });
       m.querySelectorAll('[data-rmset]').forEach(b=> b.onclick = ()=>{ collect(m); const [i,j] = b.dataset.rmset.split(':').map(Number); draft.ex[i].sets.splice(j, 1); rerender(); });
       m.querySelector('#edAddEx').onclick = ()=>{ collect(m); draft.ex.push({ exId:'', name:'', note:'', sets:[{ kg:0, reps:10 }, { kg:0, reps:10 }] }); rerender(); };
+      const mine = ()=>{ const el = document.getElementById('gyEdit'); return el && el.dataset.tok === TOK ? el : null; };
+      const so = m.querySelector('#spOpen'); if(so) so.onclick = ()=>{ collect(m); sp.open = true; rerender(); };
+      const sx = m.querySelector('#spImgX'); if(sx) sx.onclick = ()=>{ collect(m); sp.text = m.querySelector('#spText').value; sp.img = null; rerender(); };
+      const sf = m.querySelector('#spFile');
+      if(sf) sf.onchange = async ev=>{
+        const f = ev.target.files && ev.target.files[0]; if(!f) return;
+        collect(m); sp.text = m.querySelector('#spText').value; sp.err = '';
+        try{
+          if(/^image\//.test(f.type)) sp.img = { mimeType:'image/jpeg', data: await shotB64(f) };
+          else {
+            if(f.size > 200000) throw new Error('big');
+            const t = (await f.text()).trim();
+            if(!t) throw new Error('empty');
+            if(/[\u0000-\u0008\uFFFD]/.test(t)) throw new Error('bin');
+            if(t.length > 8000) throw new Error('big');
+            sp.text = (sp.text ? sp.text + '\n' : '') + t;
+          }
+        }catch(e){
+          const k = String(e && e.message);
+          sp.err = k === 'big' ? 'הקובץ ארוך מדי. אפשר להדביק רק את האימון עצמו' : k === 'empty' ? 'הקובץ ריק' : k === 'bin' ? 'זה לא נראה כמו קובץ טקסט' : 'לא הצלחתי לקרוא את הקובץ';
+        }
+        const el = mine(); if(!el) return;
+        collect(el); rerender();
+      };
+      const sg = m.querySelector('#spGo');
+      if(sg) sg.onclick = async ()=>{
+        collect(m); sp.text = m.querySelector('#spText').value;
+        if(!sp.text.trim() && !sp.img){ sp.err = 'צריך להדביק טקסט או לצרף קובץ'; rerender(); return; }
+        sp.busy = true; sp.err = ''; rerender();
+        let r = null, err = null;
+        try{ r = await parsePlan(sp.text, sp.img); }catch(e){ err = e; }
+        sp.busy = false;
+        // Closed, or another editor took its place, while waiting: drop the result.
+        const el = mine(); if(!el) return;
+        collect(el);                                      // keep anything typed during the wait
+        if(err){ sp.err = parseErr(err); rerender(); return; }
+        const sig = e=> (e.exId || e.name) + '|' + JSON.stringify((e.sets||[]).map(s=> [+s.kg||0, +s.reps||0, +s.sec||0]));
+        const have = new Set(draft.ex.map(sig));
+        const fresh = r.ex.filter(e=> !have.has(sig(e))).map(e=> Object.assign(e, { rotation: !isTrainer }));   // own workout: new machines join the rotation by default
+        draft.ex = draft.ex.filter(e=> (e.sets||[]).some(s=> +s.reps > 0 || +s.sec > 0 || +s.kg > 0)).concat(fresh);
+        if(!orig){
+          if(r.date && r.date <= B().todayKey()) draft.day = r.date;
+          if(!draft.note || draft.note === 'Full Body') draft.note = (r.title || draft.note || 'Full Body') + (r.notes ? ' · ' + r.notes : '');
+        }
+        sp.open = false; sp.text = ''; sp.img = null;
+        const n = fresh.length;
+        B().showToast(n === 0 ? 'כל התרגילים כבר מופיעים באימון' : (n === 1 ? 'פורק לתרגיל אחד' : 'פורק ל-' + n + ' תרגילים') + ' ✓ אפשר לבדוק ולתקן לפני שמירה');
+        rerender();
+      };
       m.querySelector('#edSave').onclick = ()=>{
         collect(m);
         // New exercises from a trainer's plan join the library (and so the tracking and
@@ -245,7 +309,7 @@
         close(); refreshHist(); G.openDay(draft.day); b.renderAll();
       };
     }
-    function open(){ sheet(orig ? 'עריכת אימון' : (eopts.trainer ? '👩‍🏫 בדיקה לפני שמירה' : 'אימון בדיעבד'), (eopts.trainer ? '<div class="text-[12px] gy-mut mb-3" style="margin-top:-6px">כך הבנתי את התוכנית. אפשר לתקן כל מספר, ואז לשמור.</div>' : '') + html(), bind, 'gyEdit'); }
+    function open(){ const el = sheet(orig ? 'עריכת אימון' : (eopts.trainer ? '👩‍🏫 בדיקה לפני שמירה' : 'אימון בדיעבד'), (eopts.trainer ? '<div class="text-[12px] gy-mut mb-3" style="margin-top:-6px">כך הבנתי את התוכנית. אפשר לתקן כל מספר, ואז לשמור.</div>' : '') + html(), bind, 'gyEdit'); el.dataset.tok = TOK; }
     open();
   };
 
@@ -276,6 +340,25 @@
       img.src = url;
     });
   }
+  // One parser for every pasted workout: a trainer's plan, a .txt file, free notes.
+  async function parsePlan(text, img){
+    const lib = G.lib().map(e=> ({ id:e.id, he:e.he, en:e.en || '' }));
+    const r = await fetch('/api/gemini', { method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ mode:'trainerPlan', desc: text || '', mimeType: img && img.mimeType, data: img && img.data, lib, today: B().todayKey() }) });
+    const j = await r.json().catch(()=> ({}));
+    if(!r.ok || !Array.isArray(j.exercises)) throw new Error(r.status ? 'server' : 'net');
+    if(!j.exercises.length) throw new Error('empty');
+    const ex = j.exercises.map(e=>{
+      const known = e.match && G.ex(e.match) ? e.match : (G.matchId(e.name) || (e.en ? G.matchId(e.en) : null));
+      const kx = known ? G.ex(known) : null;
+      const time = kx ? kx.kind === 'time' : e.kind === 'time';
+      return { exId: known || '', isNew: !known, name: kx ? G.exName(kx) : e.name, en: e.en, area: e.area, kind: e.kind, perSide: e.perSide, note: e.note || '', picked: true,
+        sets: e.sets.map(s=> Object.assign(time ? { kg:0, reps: s.reps || 0, sec: s.seconds || 0 } : { kg: s.kg || 0, reps: s.reps || 0, sec: s.seconds || 0 }, s.rpe ? { rpe: s.rpe } : {})) };
+    });
+    return { date: j.date || '', title: j.title || '', notes: j.notes || '', ex };
+  }
+  const parseErr = e=>{ const m = String(e && e.message); return m === 'empty' ? 'לא מצאתי תרגילים בטקסט. אפשר לנסות שוב, או להוסיף ידנית.' : m === 'server' ? 'שירות הפענוח לא הצליח כרגע. אפשר לנסות שוב בעוד רגע.' : 'הפענוח נכשל. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.'; };
+  G.parsePlan = parsePlan;
   G.openTrainerImport = function(){
     const st = { text:'', img:null, imgUrl:'', day: B().todayKey(), minutes: 60, busy:false, err:'' };
     function html(){
@@ -306,20 +389,9 @@
           if(!st.text.trim() && !st.img){ st.err = 'צריך להדביק את התוכנית או להעלות צילום מסך'; re(); return; }
           st.busy = true; st.err = ''; m.remove(); open();
           try{
-            const lib = G.lib().map(e=> ({ id:e.id, he:e.he, en:e.en || '' }));
-            const r = await fetch('/api/gemini', { method:'POST', headers:{ 'Content-Type':'application/json' },
-              body: JSON.stringify({ mode:'trainerPlan', desc: st.text, mimeType: st.img && st.img.mimeType, data: st.img && st.img.data, lib, today: B().todayKey() }) });
-            const j = await r.json().catch(()=> ({}));
-            if(!r.ok || !Array.isArray(j.exercises)) throw new Error(r.status ? 'server' : 'net');
-            if(!j.exercises.length) throw new Error('empty');
+            const j = await parsePlan(st.text, st.img);
             const day = (j.date && j.date <= B().todayKey()) ? j.date : st.day;
-            const ex = j.exercises.map(e=>{
-              const known = e.match && G.ex(e.match) ? e.match : (G.matchId(e.name) || (e.en ? G.matchId(e.en) : null));
-              const kx = known ? G.ex(known) : null;
-              const time = kx ? kx.kind === 'time' : e.kind === 'time';
-              return { exId: known || '', isNew: !known, name: kx ? G.exName(kx) : e.name, en: e.en, area: e.area, kind: e.kind, perSide: e.perSide, note: e.note || '',
-                sets: e.sets.map(s=> time ? { kg:0, reps: s.reps || 0, sec: s.seconds || 0 } : { kg: s.kg || 0, reps: s.reps || 0, sec: s.seconds || 0 }), picked: true };
-            });
+            const ex = j.ex;
             const dupe = (B().workouts()[day] || []).some(w=> (S().sessions[w.id] || {}).trainer);
             st.busy = false;
             const sheetEl = document.getElementById('gyTrainer');
@@ -331,10 +403,7 @@
               prefill: { day, minutes: st.minutes, note: (j.title || 'אימון עם ' + coachWord()) + (j.notes ? ' · ' + j.notes : ''), ex } });
           }catch(e){
             st.busy = false;
-            const msg = String(e && e.message);
-            st.err = msg === 'empty' ? 'לא מצאתי תרגילים בתוכנית. אפשר לנסות שוב, או להוסיף ידנית.'
-              : msg === 'server' ? 'שירות הפענוח לא הצליח כרגע. אפשר לנסות שוב בעוד רגע.'
-              : 'הפענוח נכשל. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.';
+            st.err = parseErr(e);
             const mm = document.getElementById('gyTrainer'); if(!mm) return; mm.remove(); open();
           }
         };
