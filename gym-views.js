@@ -221,11 +221,11 @@
         try{
           if(/^image\//.test(f.type)) sp.img = { mimeType:'image/jpeg', data: await shotB64(f) };
           else {
-            if(f.size > 200000) throw new Error('big');
+            if(f.size > 1000000) throw new Error('big');
             const t = (await f.text()).trim();
             if(!t) throw new Error('empty');
             if(/[\u0000-\u0008\uFFFD]/.test(t)) throw new Error('bin');
-            if(t.length > 8000) throw new Error('big');
+            if(t.length > 200000) throw new Error('big');
             sp.text = (sp.text ? sp.text + '\n' : '') + t;
           }
         }catch(e){
@@ -346,7 +346,30 @@
     });
   }
   // One parser for every pasted workout: a trainer's plan, a .txt file, free notes.
+  // Any length: a long paste is cut into parts on line breaks, the parts are read in
+  // parallel, and the exercises come back joined in their original order.
   async function parsePlan(text, img){
+    text = String(text || '');
+    const MAX = 2500;
+    if(img || text.length <= MAX) return parsePart(text, img);
+    const parts = []; let cur = '';
+    text.split(/\r?\n/).forEach(line=>{
+      while(line.length > MAX){ if(cur){ parts.push(cur); cur = ''; } parts.push(line.slice(0, MAX)); line = line.slice(MAX); }
+      if(cur.length + line.length + 1 > MAX){ parts.push(cur); cur = ''; }
+      cur += (cur ? '\n' : '') + line;
+    });
+    if(cur.trim()) parts.push(cur);
+    const out = new Array(parts.length); let firstErr = null;
+    // at most 4 requests at a time, so a very long paste doesn't flood the connection
+    for(let i = 0; i < parts.length; i += 4){
+      await Promise.all(parts.slice(i, i + 4).map((p, k)=> parsePart(p, null).then(r=>{ out[i + k] = r; }).catch(e=>{ if(String(e && e.message) !== 'empty' && !firstErr) firstErr = e; })));
+    }
+    const got = out.filter(Boolean);
+    if(!got.length) throw firstErr || new Error('empty');
+    return { date: (got.find(r=> r.date) || {}).date || '', title: (got.find(r=> r.title) || {}).title || '', notes: got.map(r=> r.notes).filter(Boolean).join(' · '),
+      ex: [].concat(...got.map(r=> r.ex)), partsFailed: parts.length - got.length };
+  }
+  async function parsePart(text, img){
     const lib = G.lib().map(e=> ({ id:e.id, he:e.he, en:e.en || '' }));
     // A request that never answers (a stalled phone connection) used to leave the button on
     // "מפענחים…" forever. After 45s it gives up with a clear message and the text stays.

@@ -395,7 +395,7 @@ export default async function handler(req, res) {
   }
 
   if (mode === 'trainerPlan') {
-    const text = String(desc || '').slice(0, 8000);
+    const text = String(desc || '').slice(0, 20000);   // the client splits longer pastes into parts
     if (!text && !data) return res.status(400).json({ error: 'no_input' });
     const lib = (Array.isArray(body && body.lib) ? body.lib : []).filter((e) => e && typeof e === 'object').slice(0, 120);
     const today = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.today) || '')) ? body.today : '';
@@ -407,7 +407,7 @@ export default async function handler(req, res) {
       'חימום, הליכה ושחרור אינם תרגילים — אל תכלול אותם. סופר סט: כל תרגיל בנפרד, והערה "סופר סט". ' +
       'הערות כמו מכשיר, תנוחה, מנוחה או "5 שניות סטטי" — לשדה note. ' +
       'קושי ("קושי 7", "RPE 6.5", "בערך 7", "קושי 7.5 בשניהם") — לשדה rpe בכל סט שהוא חל עליו; אם לא כתוב קושי, השאר ריק. ' +
-      'אם יש כמה ימים בטקסט, קח רק את האימון הראשון. ' +
+      'חלץ את כל התרגילים שמופיעים בטקסט, עד האחרון, גם אם הוא ארוך מאוד, ובסדר שבו הם מופיעים. ' +
       'משקל שנכתב פעם אחת לתרגיל חל על כל הסטים שלו, גם כשהסטים מפורטים אחד-אחד ("9 קג סט ראשון 12, סט שני 12" = שני סטים של 9 ק״ג × 12). אל תבלבל בין מספר חזרות למשקל. ' +
       'קושי שנכתב פעם אחת בסוף השורה חל על כל הסטים באותה שורה, גם בתרגיל זמן (פלאנק). ' +
       'match: המזהה מרשימת המאגר כשמדובר באותו תרגיל (גם בניסוח אחר, למשל "לחיצות רגליים במכונה" = leg_press, "היפטראס" = hip_thrust, "משיכה/חתירה במכונה סלקטור" = selector_row). ' +
@@ -423,7 +423,7 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: tParts }],
-          generationConfig: { responseMimeType: 'application/json', responseSchema: TRAINER_SCHEMA, temperature: 0.1, thinkingConfig: { thinkingBudget: 512 } },
+          generationConfig: { responseMimeType: 'application/json', responseSchema: TRAINER_SCHEMA, temperature: 0.1, maxOutputTokens: 16384, thinkingConfig: { thinkingBudget: 512 } },
         }),
       });
       if (!gRes.ok) {
@@ -446,10 +446,10 @@ export default async function handler(req, res) {
         kind: e.kind === 'time' ? 'time' : 'reps',
         perSide: !!e.perSide,
         note: String(e.note || '').trim().slice(0, 160),
-        sets: (Array.isArray(e.sets) ? e.sets : []).slice(0, 10).map((x) => ({ kg: num(x.kg), reps: Math.round(num(x.reps)), seconds: Math.round(num(x.seconds)),
+        sets: (Array.isArray(e.sets) ? e.sets : []).slice(0, 20).map((x) => ({ kg: num(x.kg), reps: Math.round(num(x.reps)), seconds: Math.round(num(x.seconds)),
           rpe: (Number(x.rpe) >= 1 && Number(x.rpe) <= 10) ? Math.round(Number(x.rpe) * 2) / 2 : 0 }))
           .filter((x) => x.reps > 0 || x.seconds > 0 || x.kg > 0),
-      })).filter((e) => e.name && e.sets.length).slice(0, 25);
+      })).filter((e) => e.name && e.sets.length).slice(0, 80);
       return res.status(200).json({
         date: /^\d{4}-\d{2}-\d{2}$/.test(String(parsed.date || '')) ? parsed.date : '',
         title: String(parsed.title || '').trim().slice(0, 60),
