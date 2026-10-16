@@ -41,7 +41,9 @@
   .gy-top{position:sticky;top:0;z-index:2;background:rgba(7,8,13,.92);backdrop-filter:blur(8px);padding:calc(10px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid rgba(255,255,255,.06)}
   #gymLive .gy-wrap{padding-top:calc(12px + env(safe-area-inset-top))}
   #gymLive .gy-top + .gy-wrap{padding-top:12px}
-  .gy-sheet{padding-top:calc(16px + env(safe-area-inset-top)) !important}
+  /* A bottom sheet never reaches the status bar (height is capped below it), so it needs no
+     safe-area padding on top: that padding was the big empty band above the title on iPhone. */
+  .gy-sheet{max-height:calc(100vh - env(safe-area-inset-top) - 12px) !important;max-height:calc(100dvh - env(safe-area-inset-top) - 12px) !important;padding-bottom:calc(28px + env(safe-area-inset-bottom)) !important}
   .gy-bar{height:6px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}
   .gy-bar>i{display:block;height:100%;background:linear-gradient(90deg,#00ffa3,#27d3ff)}
   .gy-fb{border-radius:16px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.55}
@@ -50,13 +52,19 @@
   .gy-fb.down,.gy-fb.new{background:rgba(255,194,75,.07);border:1px solid rgba(255,194,75,.35)}
   .gy-rest{position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:75;max-width:496px;margin:0 auto;border-radius:18px;padding:12px 16px;background:#11131f;border:1px solid rgba(39,211,255,.5);box-shadow:0 10px 40px rgba(0,0,0,.6)}
   .gy-row{display:flex;align-items:center;gap:8px}
-  .gy-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .gy-grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .gy-grid2>*{min-width:0}
+  /* Narrow set-table cells: less side padding so "6.5" is not cut to ".5" on 360-375px. */
+  .gy-tbl .gy-in{padding:8px 3px;text-align:center}
   .gy-list li{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
   .gy-slider{width:100%;accent-color:#00ffa3;height:34px}
   .gy-modal{position:fixed;inset:0;z-index:72;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;direction:rtl}
   .gy-sheet{background:#0d0f19;border:1px solid rgba(255,255,255,.08);border-radius:22px 22px 0 0;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:16px 16px 28px}
-  @media (min-width:700px){ .gy-modal{align-items:center} .gy-sheet{border-radius:22px} }
-  .gy-in{background:rgba(8,9,16,.7);border:1px solid rgba(255,255,255,.1);border-radius:12px;color:#f3f4f6;padding:8px 10px;font-weight:700;font-size:14px;width:100%;outline:none}
+  @media (min-width:700px){ .gy-modal{align-items:center} .gy-sheet{border-radius:22px;max-height:88vh !important} }
+  .gy-in{background:rgba(8,9,16,.7);border:1px solid rgba(255,255,255,.1);border-radius:12px;color:#f3f4f6;padding:8px 10px;font-weight:700;font-size:14px;width:100%;min-width:0;max-width:100%;box-sizing:border-box;outline:none}
+  /* iOS draws a date field at its own natural width and ignores width:100%, so it spilled
+     over the field next to it. Without the native look it obeys the grid like any input. */
+  input[type=date].gy-in,input[type=time].gy-in{-webkit-appearance:none;appearance:none;display:block;min-height:40px;line-height:22px;text-align:right}
   .gy-in:focus{border-color:rgba(0,255,163,.7)}
   .gy-tbl{width:100%;border-collapse:collapse;font-size:12px}
   .gy-tbl td,.gy-tbl th{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.06);text-align:right}

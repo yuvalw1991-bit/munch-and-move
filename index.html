@@ -37,6 +37,25 @@
   }
 
   * { font-family:'Polin','system-ui',sans-serif; }
+  /* Layout guards (audit 16.10): dark native controls; iOS draws date/time fields at their
+     own width and ignores width:100%, so they spilled over the field next to them; inputs
+     inside a flex row must be allowed to shrink; long words in user text must wrap. */
+  :root{ color-scheme:dark; }
+  input[type=date],input[type=time]{ -webkit-appearance:none; appearance:none; min-width:0; max-width:100%; min-height:36px; }
+  .flex > input, .flex > select, .flex > textarea{ min-width:0; }
+  .wrap-any{ overflow-wrap:anywhere; word-break:break-word; }
+  /* Every full-screen modal keeps clear of the iPhone clock and home bar, and its box never
+     grows taller than the visible screen: it scrolls inside instead (the favorite-categories
+     window used to run off both ends with no way out). */
+  .fixed.inset-0.z-50:not(#chatPanel){ padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
+  .fixed.inset-0.z-50 > .glass-hl:not(.flex-col){ max-height:calc(100vh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; }
+  /* Close buttons: a 44px finger target, not a 16x28 glyph */
+  #achClose,#shopClose,#remClose,#backupClose,#repClose,#closeHistoryBtn,#introClose,#chatClose{ min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; margin:-8px; }
+  /* Undo in a long toast stays one tappable button */
+  #undoBtn{ flex-shrink:0; white-space:nowrap; min-width:44px; padding:8px 10px; }
+  #toastMsg{ min-width:0; }
+  /* the floating assistant button must never sit on the last row's buttons (phones) */
+  @media (max-width:1023px){ #appMain{ padding-bottom:calc(9rem + env(safe-area-inset-bottom)) !important; } }
   /* Transparent scrollbars — invisible track & thumb, still scrollable */
   * { scrollbar-width: none; -ms-overflow-style: none; }
   *::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
@@ -153,7 +172,7 @@
   .rep-prev table{ width:100%; border-collapse:collapse; }
   .rep-prev th, .rep-prev td{ border:1px solid rgba(255,255,255,.10); padding:3px 6px; text-align:right; font-size:11px; }
   .rep-prev th{ background:rgba(255,255,255,.05); color:#b8c0d0; font-weight:700; }
-  .rep-prev td.num{ direction:ltr; text-align:center; color:#eef1f6; font-weight:800; font-variant-numeric:tabular-nums; }
+  .rep-prev td.num{ direction:ltr; text-align:center; color:#eef1f6; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
 </style>
 <!-- Precompiled Tailwind — loaded AFTER the inline <style> on purpose, so Tailwind
      utilities (.fixed etc.) override same-specificity component classes (.btn-neon),
@@ -224,13 +243,13 @@
     <button onclick="document.querySelector('[data-menu=shop]').click()" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-bold text-gray-400 active:text-gray-100 transition text-right"><span class="text-base">🛒</span> רשימת קניות</button>
     <button onclick="document.querySelector('[data-menu=tour]').click()" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-bold text-gray-400 active:text-gray-100 transition text-right"><span class="text-base">🧭</span> סיור באפליקציה</button>
   </div>
-  <div class="mt-auto flex flex-col gap-2">
+  <div class="mt-auto flex flex-col gap-2 sticky bottom-0 pt-2 pb-1" style="background:#07080d">
     <button onclick="document.getElementById('chatFab').click()" class="btn-neon text-white font-black rounded-xl py-3 text-sm active:scale-95 transition">💬 העוזר שלי</button>
     <button onclick="document.querySelector('[data-menu=account]').click()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 active:text-gray-200 transition text-right"><span>👤</span> החשבון שלי · התנתקות</button>
   </div>
 </aside>
 <div class="lg:flex-1 lg:min-w-0">
-<div class="max-w-md mx-auto px-4 lg:max-w-4xl lg:px-8" style="padding-top:env(safe-area-inset-top);padding-bottom:calc(5rem + env(safe-area-inset-bottom))">
+<div id="appMain" class="max-w-md mx-auto px-4 lg:max-w-4xl lg:px-8" style="padding-top:env(safe-area-inset-top);padding-bottom:calc(5rem + env(safe-area-inset-bottom))">
 
   <!-- Header -->
   <header class="flex items-center justify-between pt-6 pb-4">
@@ -662,7 +681,7 @@
   <div class="glass-hl rounded-2xl px-7 py-6 flex flex-col items-center gap-3">
     <div class="w-9 h-9 border-4 border-cyan-300 border-t-transparent rounded-full animate-spin" style="box-shadow:0 0 18px -2px rgba(0,229,255,.85)"></div>
     <span id="aiOverlayMsg" class="text-sm font-bold text-gray-100">מנתח...</span>
-    <span class="text-[10px] text-gray-500">הקישי כדי לבטל</span>
+    <span class="text-[10px] text-gray-500">לחיצה כאן מבטלת</span>
   </div>
 </div>
 
@@ -855,7 +874,7 @@
         <input id="tF" type="number" inputmode="decimal" class="w-full input-dark in-s border border-sky-500/30 rounded-xl px-1 py-2 text-center font-bold txt-sky outline-none">
       </div>
     </div>
-    <div class="flex gap-2">
+    <div class="flex gap-2" style="position:sticky;bottom:-16px;margin:0 -16px -16px;padding:10px 16px 16px;background:rgba(13,15,25,.97);border-top:1px solid rgba(255,255,255,.06)">
       <button id="saveTargetsBtn" class="glow-green flex-1 bg-gradient-to-l from-emerald-400 to-emerald-500 text-ink font-black rounded-xl py-2.5 active:scale-95 transition">שמירה</button>
       <button id="closeTargetsBtn" class="input-dark border border-line rounded-xl px-5 font-bold active:scale-95 transition">ביטול</button>
     </div>
@@ -1195,15 +1214,15 @@
           <input id="remTimes" type="text" placeholder="שעות מופרדות בפסיק — למשל: 08:00, 14:00, 20:00" class="input-dark w-full border border-line rounded-xl px-3 py-2.5 text-xs text-gray-100 placeholder-gray-600 outline-none mb-2" dir="ltr" style="text-align:right">
         </div>
         <div id="remIntervalBox" class="hidden">
-          <div class="flex gap-2 mb-2 items-center">
+          <div class="flex flex-wrap gap-2 mb-2 items-center">
             <span class="text-[11px] font-bold text-gray-400 whitespace-nowrap">כל</span>
             <select id="remEvery" class="input-dark flex-1 border border-line rounded-xl px-2 py-2 text-xs font-bold text-gray-200 outline-none">
               <option value="30">30 דקות</option><option value="45">45 דקות</option><option value="60">שעה</option><option value="90">שעה וחצי</option><option value="120" selected>שעתיים</option><option value="180">3 שעות</option><option value="240">4 שעות</option>
             </select>
             <span class="text-[11px] font-bold text-gray-400 whitespace-nowrap">בין</span>
-            <input id="remWinStart" type="time" value="08:00" class="input-dark border border-line rounded-xl px-2 py-2 text-xs font-bold text-gray-200 outline-none">
+            <input id="remWinStart" type="time" value="08:00" style="width:6.5rem" class="input-dark border border-line rounded-xl px-2 py-2 text-xs font-bold text-gray-200 outline-none">
             <span class="text-[11px] font-bold text-gray-400">ל-</span>
-            <input id="remWinEnd" type="time" value="22:00" class="input-dark border border-line rounded-xl px-2 py-2 text-xs font-bold text-gray-200 outline-none">
+            <input id="remWinEnd" type="time" value="22:00" style="width:6.5rem" class="input-dark border border-line rounded-xl px-2 py-2 text-xs font-bold text-gray-200 outline-none">
           </div>
         </div>
         <button id="remAddBtn" class="glow-green w-full bg-gradient-to-l from-emerald-400 to-emerald-500 text-ink font-black rounded-xl py-3 text-sm active:scale-95 transition">הוספת תזכורת 🔔</button>
@@ -1286,10 +1305,10 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=9"></script>
-<script src="gym-ui.js?v=9"></script>
-<script src="gym-views.js?v=9"></script>
-<script src="celebrate.js?v=3"></script>
+<script src="gym-core.js?v=11"></script>
+<script src="gym-ui.js?v=11"></script>
+<script src="gym-views.js?v=11"></script>
+<script src="celebrate.js?v=4"></script>
 <script>
 (function(){
   'use strict';
@@ -1669,7 +1688,7 @@
     m.style.top = vv.offsetTop + 'px';
     m.style.height = vv.height + 'px';
     m.style.bottom = 'auto';
-    box.style.maxHeight = Math.max(96, vv.height - 24) + 'px';
+    box.style.maxHeight = 'calc(' + Math.max(96, vv.height - 24) + 'px - env(safe-area-inset-top) - env(safe-area-inset-bottom))';
   }
   function openShop(){
     renderShopMeals(); renderShop();
@@ -1775,7 +1794,7 @@
     // NO hard floor here. A 180px minimum against a 130px viewport (phone in landscape
     // with the keyboard up) pushed the box past the modal, which clips — the panel just
     // ended mid-air with the app showing underneath. Always fit what we actually have.
-    box.style.maxHeight = Math.max(96, vv.height - 24) + 'px';
+    box.style.maxHeight = 'calc(' + Math.max(96, vv.height - 24) + 'px - env(safe-area-inset-top) - env(safe-area-inset-bottom))';
     // Below ~430px the padding costs more than it's worth; below ~260px even the title
     // has to go, or there is nothing left for results.
     box.style.padding = vv.height < 430 ? '0.75rem' : '';
@@ -2147,8 +2166,8 @@
               style="transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1)"/>
           </svg>
           <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <span class="text-base font-black leading-none ${centerCls}">${over?'+'+fmt(Math.abs(remaining)):fmt(remaining)}</span>
-            <span class="text-[9px] text-gray-500 font-bold">/${fmt(target)}</span>
+            <span dir="ltr" class="${String(fmt(Math.abs(remaining))).length > 4 ? 'text-sm' : 'text-base'} font-black leading-none ${centerCls}">${over?'+'+fmt(Math.abs(remaining)):fmt(remaining)}</span>
+            <span dir="ltr" class="text-[9px] text-gray-500 font-bold">/${fmt(target)}</span>
           </div>
         </div>
         <span class="text-xs font-black mt-2 ${macro.text}">${macro.label}</span>
@@ -2300,15 +2319,15 @@
     const cat = favCatOf(fv);
     // Visible, tappable category control — assign / move / change an existing favorite.
     const catPill = cat
-      ? `<button data-catfav="${fv.id}" class="text-[9px] font-bold txt-amber bg-amber-500/10 border border-amber-500/30 rounded-full px-1.5 py-0.5 active:scale-95 transition whitespace-nowrap" title="שינוי קטגוריה">📁 ${esc(cat)}</button>`
+      ? `<button data-catfav="${fv.id}" class="text-[9px] font-bold txt-amber bg-amber-500/10 border border-amber-500/30 rounded-full px-1.5 py-0.5 active:scale-95 transition whitespace-nowrap shrink-0" dir="auto" style="max-width:38%;overflow:hidden;text-overflow:ellipsis" title="שינוי קטגוריה">📁 ${esc(cat)}</button>`
       : `<button data-catfav="${fv.id}" class="text-[9px] font-bold text-gray-400 border border-line rounded-full px-1.5 py-0.5 active:text-gray-200 transition whitespace-nowrap" title="שיוך לקטגוריה">📁 + קטגוריה</button>`;
-    return `<div class="glass rounded-xl pr-3 pl-1 py-1.5 flex items-center gap-1.5 active:scale-95 transition">
-        <button data-add="${fv.id}" class="text-right">
-          <div class="text-xs font-bold text-gray-100 leading-tight">${esc(fv.name)}${qtyTag(fv)}</div>
+    return `<div class="glass rounded-xl pr-3 pl-1 py-1.5 flex items-center gap-1.5 active:scale-95 transition" style="max-width:100%">
+        <button data-add="${fv.id}" class="text-right" style="flex:1 1 auto;min-width:0">
+          <div class="text-xs font-bold text-gray-100 leading-tight wrap-any" dir="auto">${esc(fv.name)}${qtyTag(fv)}</div>
           <div class="text-[10px] font-medium"><span class="txt-green">ח${fmt(fv.p)}</span> · <span class="txt-amber">פ${fmt(fv.c)}</span> · <span class="txt-sky">ש${fmt(fv.f)}</span></div>
         </button>
         ${catPill}
-        <button data-delfav="${fv.id}" class="text-gray-600 active:text-[#ff4d6d] px-1.5 text-sm font-black">×</button>
+        <button data-delfav="${fv.id}" class="text-gray-400 active:text-[#ff4d6d] px-1.5 text-sm font-black shrink-0">×</button>
       </div>`;
   }
 
@@ -2423,7 +2442,7 @@
     } else {
       if(favMeta.list.length===0){ el.innerHTML = `<p class="text-[11px] text-gray-500">אין עדיין קטגוריות. אפשר להוסיף אחת למטה.</p>`; return; }
       el.innerHTML = favMeta.list.map(c=>
-        `<span class="inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 border border-line text-gray-300">${esc(c)}<button data-delcat="${esc(c)}" class="text-gray-500 active:text-[#ff4d6d] font-black leading-none">×</button></span>`
+        `<span class="inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 border border-line text-gray-300">${esc(c)}<button data-delcat="${esc(c)}" style="padding:6px;margin:-6px" class="text-gray-400 active:text-[#ff4d6d] font-black leading-none">×</button></span>`
       ).join('');
       el.querySelectorAll('[data-delcat]').forEach(b=> b.onclick = ()=> deleteFavCat(b.dataset.delcat));
     }
@@ -2581,13 +2600,13 @@
     // recipe is still recognisable.
     const per = servings > 1 ? tplPerServing(t) : tot;
     return `<div class="glass rounded-xl px-3 py-2.5 pop">
-      <div class="flex items-center justify-between gap-2">
-        <div class="text-right min-w-0 flex-1">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="text-right min-w-0 flex-1" style="flex-basis:11rem">
           <div class="text-sm font-black text-gray-100 truncate flex items-center gap-1.5">
-            <span class="truncate">🍱 ${esc(t.name)}</span>
+            <span class="truncate" dir="auto">🍱 ${esc(t.name)}</span>
             ${servings > 1
               ? `<span class="text-[9px] font-bold txt-amber bg-amber-500/10 border border-amber-500/30 rounded-full px-1.5 py-0.5 shrink-0">${servings} מנות</span>`
-              : `<span class="text-[9px] font-bold txt-sky bg-cyan-500/10 border border-cyan-500/30 rounded-full px-1.5 py-0.5 shrink-0">${n} מרכיבים</span>`}
+              : `<span class="text-[9px] font-bold txt-sky bg-cyan-500/10 border border-cyan-500/30 rounded-full px-1.5 py-0.5 shrink-0">${heCount(n, 'מרכיב אחד', 'מרכיבים')}</span>`}
           </div>
           <div class="text-[11px] font-bold mt-0.5">
             <span class="txt-green">ח ${fmt(round1(per.p))}</span> ·
@@ -2603,7 +2622,7 @@
           <button data-tpladd="${t.id}" class="btn-neon text-white rounded-lg px-2.5 py-1.5 text-[11px] font-black active:scale-95 transition" title="הוספה ליום">＋ הוספה</button>
           <button data-tplhalf="${t.id}" class="input-dark border border-amber-500/40 txt-amber rounded-lg px-2 py-1.5 text-[11px] font-black active:scale-95 transition" title="הוספה בחצי מנה">½</button>
           <button data-tpledit="${t.id}" class="text-gray-500 active:txt-green text-base px-1">✏️</button>
-          <button data-tpldel="${t.id}" class="text-gray-600 active:text-[#ff4d6d] text-lg px-1">🗑</button>
+          <button data-tpldel="${t.id}" class="text-gray-400 active:text-[#ff4d6d] text-lg px-1">🗑️</button>
         </div>
       </div>
     </div>`;
@@ -2873,7 +2892,7 @@
     return `<div class="glass rounded-xl px-4 py-3 flex items-center justify-between gap-2 pop">
         ${logThumbHtml(l.id)}
         <button data-edit="${l.id}" class="text-right flex-1 min-w-0">
-          <div class="text-sm font-bold text-gray-100 truncate">${esc(l.name)}${qtyTag(l)}</div>
+          <div class="flex items-baseline gap-1 min-w-0 text-sm font-bold text-gray-100"><span class="truncate" dir="auto">${esc(l.name)}</span><span class="shrink-0 text-[11px]">${qtyTag(l)}</span></div>
           <div class="text-[11px] font-medium">
             <span class="txt-green">ח ${fmt(l.p)}</span> ·
             <span class="txt-amber">פ ${fmt(l.c)}</span> ·
@@ -2882,7 +2901,7 @@
         </button>
         <div class="flex items-center gap-1 shrink-0">
           <button data-edit="${l.id}" class="text-gray-500 active:txt-green text-base px-1.5">✏️</button>
-          <button data-del="${l.id}" class="text-gray-600 active:text-[#ff4d6d] text-lg px-1.5">🗑</button>
+          <button data-del="${l.id}" class="text-gray-400 active:text-[#ff4d6d] text-lg px-1.5">🗑️</button>
         </div>
       </div>`;
   }
@@ -2892,7 +2911,7 @@
     const rows = comps.map(co =>
       `<div class="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-line/60">
         <div class="text-right min-w-0">
-          <div class="text-[11px] font-bold text-gray-300 truncate">${esc(co.name)}${qtyTag(co)}</div>
+          <div class="flex items-baseline gap-1 min-w-0 text-[11px] font-bold text-gray-300"><span class="truncate" dir="auto">${esc(co.name)}</span><span class="shrink-0">${qtyTag(co)}</span></div>
         </div>
         <div class="text-[10px] font-medium shrink-0 whitespace-nowrap">
           <span class="txt-green">ח ${fmt(co.p)}</span> ·
@@ -2905,10 +2924,10 @@
         <div class="px-4 py-3 flex items-center justify-between gap-2">
           ${logThumbHtml(l.id)}
           <button data-toggle="${l.id}" class="text-right flex-1 min-w-0">
-            <div class="text-sm font-black text-gray-100 truncate flex items-center gap-1.5">
-              <span>🍽️ ${esc(l.name)}</span>
-              <span class="text-[9px] font-bold txt-sky bg-cyan-500/10 border border-cyan-500/30 rounded-full px-1.5 py-0.5">${comps.length} מרכיבים</span>
-              <svg class="chev w-3.5 h-3.5 text-gray-500 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>
+            <div class="text-sm font-black text-gray-100 overflow-hidden flex items-center gap-1.5 min-w-0">
+              <span class="truncate min-w-0" dir="auto">🍽️ ${esc(l.name)}</span>
+              <span class="text-[9px] font-bold txt-sky bg-cyan-500/10 border border-cyan-500/30 rounded-full px-1.5 py-0.5 shrink-0">${heCount(comps.length, 'מרכיב אחד', 'מרכיבים')}</span>
+              <svg class="chev w-3.5 h-3.5 text-gray-500 transition-transform shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div class="text-[11px] font-bold mt-0.5">
               <span class="txt-green">ח ${fmt(l.p)}</span> ·
@@ -2920,7 +2939,7 @@
           <div class="flex items-center gap-1 shrink-0">
             <button data-savetpl="${l.id}" class="text-gray-500 active:text-amber-300 text-base px-1.5" title="שמירה ל&quot;הארוחות שלי&quot;">🍱</button>
             <button data-edit="${l.id}" class="text-gray-500 active:txt-green text-base px-1.5">✏️</button>
-            <button data-del="${l.id}" class="text-gray-600 active:text-[#ff4d6d] text-lg px-1.5">🗑</button>
+            <button data-del="${l.id}" class="text-gray-400 active:text-[#ff4d6d] text-lg px-1.5">🗑️</button>
           </div>
         </div>
         <div data-comps="${l.id}" class="hidden bg-black/20 pb-1">${rows}</div>
@@ -4343,7 +4362,11 @@
   // weight is always spelled with ק״ג — so a mixed session can't be misread.
   function setsSummary(sets){
     const list = (sets||[]).filter(s=> (+s.reps>0));
-    if(!list.length) return '';
+    if(!list.length){
+      // Timed sets (a plank) carry seconds, not reps: show those instead of an empty row.
+      const secs = (sets||[]).map(s=> +s.sec||0).filter(x=> x>0);
+      return secs.map(x=> Math.floor(x/60) + ':' + String(Math.round(x%60)).padStart(2,'0')).join(' + ');
+    }
     const kgs  = list.map(s=>+s.kg||0);
     const reps = list.map(s=>+s.reps||0);
     const sameKg   = kgs.every(k=>k===kgs[0]);
@@ -4913,7 +4936,7 @@
     if(goal!=null && goal>=lo && goal<=hi){
       const gy = yOf(goal).toFixed(1);
       body += '<line x1="'+padX+'" y1="'+gy+'" x2="'+(W-padX)+'" y2="'+gy+'" stroke="#00ffa3" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.75"/>' +
-              '<text x="'+(W-padX)+'" y="'+(+gy-4)+'" text-anchor="end" font-size="9" fill="#00ffa3" font-weight="700">יעד '+goal+'</text>';
+              '<text x="'+(W-padX)+'" y="'+(+gy-4)+'" text-anchor="end" font-size="11" fill="#00ffa3" font-weight="700">יעד '+goal+'</text>';
     }
     body += '<path d="'+area+'" fill="url(#wgrad)" opacity="0.35"/>';
     body += '<path d="'+line+'" fill="none" stroke="#27d3ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(39,211,255,.6))"/>';
@@ -4923,8 +4946,8 @@
         esc(dateFromKey(p.day).toLocaleDateString('he-IL',{day:'numeric',month:'numeric'}))+': '+p.kg+' ק״ג</title></circle>';
     });
     const f = d => dateFromKey(d).toLocaleDateString('he-IL',{day:'numeric',month:'numeric'});
-    body += '<text x="'+(W-padX)+'" y="'+(H-5)+'" text-anchor="end" font-size="9" fill="#6b7280" font-weight="700">'+esc(f(pts[0].day))+'</text>';
-    body += '<text x="'+padX+'" y="'+(H-5)+'" text-anchor="start" font-size="9" fill="#6b7280" font-weight="700">'+esc(f(pts[pts.length-1].day))+'</text>';
+    body += '<text x="'+(W-padX)+'" y="'+(H-5)+'" text-anchor="end" font-size="11" fill="#6b7280" font-weight="700">'+esc(f(pts[0].day))+'</text>';
+    body += '<text x="'+padX+'" y="'+(H-5)+'" text-anchor="start" font-size="11" fill="#6b7280" font-weight="700">'+esc(f(pts[pts.length-1].day))+'</text>';
     // direction:ltr — the page is RTL, where text-anchor "start"/"end" resolve to
     // right/left. Both date labels were anchored to the wrong edge and ~60% of each one
     // rendered outside the viewBox: "1.3.26" showed up as a bare "26".
@@ -4947,7 +4970,7 @@
         input + '</section>';
     } else {
       const r1 = n => Math.round(n*10)/10;
-      const sign = n => (n>0?'+':'') + r1(n);
+      const sign = n => '⁦' + (n>0?'+':'') + r1(n) + '⁩';   // isolated: RTL drew "4.1-"
       const dCls = s.totalDelta<0 ? 'txt-green' : (s.totalDelta>0 ? 'txt-amber' : 'text-gray-300');
       const stat = (label,val,cls)=> '<div class="glass rounded-xl p-2.5 text-center"><div class="text-[9px] text-gray-500 font-bold mb-0.5">'+label+'</div><div class="text-base font-black '+(cls||'text-gray-100')+'">'+val+'</div></div>';
       box.innerHTML = '<section class="glass-hl rounded-2xl p-4">' +
@@ -5080,8 +5103,8 @@
       body += '<circle cx="'+xOf(i).toFixed(1)+'" cy="'+yOf(p.v).toFixed(1)+'" r="'+(isLast?3.4:2)+'" fill="'+(isLast?'#fff':'#a78bfa')+'"><title>'+
         esc(f(p.day)) + ': ' + p.v + ' ס״מ</title></circle>';
     });
-    body += '<text x="'+(W-padX)+'" y="'+(H-5)+'" text-anchor="end" font-size="9" fill="#6b7280" font-weight="700">'+esc(f(pts[0].day))+'</text>';
-    body += '<text x="'+padX+'" y="'+(H-5)+'" text-anchor="start" font-size="9" fill="#6b7280" font-weight="700">'+esc(f(pts[pts.length-1].day))+'</text>';
+    body += '<text x="'+(W-padX)+'" y="'+(H-5)+'" text-anchor="end" font-size="11" fill="#6b7280" font-weight="700">'+esc(f(pts[0].day))+'</text>';
+    body += '<text x="'+padX+'" y="'+(H-5)+'" text-anchor="start" font-size="11" fill="#6b7280" font-weight="700">'+esc(f(pts[pts.length-1].day))+'</text>';
     // direction:ltr — the page is RTL, where text-anchor "start"/"end" resolve to
     // right/left. Both date labels were anchored to the wrong edge and ~60% of each one
     // rendered outside the viewBox: "1.3.26" showed up as a bare "26".
@@ -5147,7 +5170,7 @@
     m.style.top = vv.offsetTop + 'px';
     m.style.height = vv.height + 'px';
     m.style.bottom = 'auto';
-    boxEl.style.maxHeight = Math.max(96, vv.height - 24) + 'px';
+    boxEl.style.maxHeight = 'calc(' + Math.max(96, vv.height - 24) + 'px - env(safe-area-inset-top) - env(safe-area-inset-bottom))';
   }
   function renderMeasureInputs(){
     const box = $('msInputs'); if(!box) return;
@@ -5556,8 +5579,8 @@
       // Trophy only once there's something to beat — a first-ever log isn't a record.
       const isPR = pr && pr.sessions>1 && best>0 && best>=pr.bestKg;
       return `<div class="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-line/60">
-        <div class="text-xs font-bold text-gray-300 truncate min-w-0">${isPR?'🏆 ':''}${esc(e.name)}</div>
-        <div class="text-[10px] font-bold shrink-0 whitespace-nowrap txt-amber">${esc(setsSummary(e.sets))}</div>
+        <div class="text-xs font-bold text-gray-300 truncate" style="flex:1 1 auto;min-width:38%">${isPR?'🏆 ':''}${esc(e.name)}</div>
+        <div class="text-[10px] font-bold txt-amber" style="min-width:0;text-align:left">${esc(setsSummary(e.sets)).replace(/(\d+(?:\.\d+)?×\d+(?:\.\d+)?)/g, '<bdi dir="ltr">$1</bdi>')}</div>
       </div>`;
     }).join('');
     return `<div class="mt-2 -mx-4 -mb-3 bg-black/20 rounded-b-xl overflow-hidden">
@@ -6475,7 +6498,7 @@
     $('planTrend').innerHTML=`
       <div class="flex items-baseline justify-between mb-1">
         <span class="text-[11px] text-gray-400">שינוי מתחילת התוכנית</span>
-        <span class="text-sm font-black ${cls}">${sign}${delta} ק״ג</span>
+        <span class="text-sm font-black ${cls}"><bdi dir="ltr">${sign}${delta}</bdi> ק״ג</span>
       </div>
       <div class="text-[10px] text-gray-500 leading-relaxed">${last5}</div>`;
   }
@@ -6523,7 +6546,7 @@
       </div>
       <div class="glass rounded-xl px-3 py-2 flex items-center justify-between">
         <span class="text-[11px] font-bold text-gray-400">מאזן אנרגיה שבועי</span>
-        <span class="text-sm font-black ${net<0?'txt-green':(net>0?'txt-amber':'text-gray-300')}">${net>0?'+':''}${net} קל׳</span>
+        <span class="text-sm font-black ${net<0?'txt-green':(net>0?'txt-amber':'text-gray-300')}"><bdi dir="ltr">${net>0?'+':''}${net}</bdi> קל׳</span>
       </div>
       <p class="text-[10px] text-gray-500 mt-1.5 text-center">נכנס ${foodKcal} קל׳ · נשרף ${burned} קל׳ · ${loggedDays} ימי מעקב</p>`;
   }
@@ -7233,14 +7256,14 @@
         body += `<line x1="${(x-0.6).toFixed(1)}" y1="${ty.toFixed(1)}" x2="${(x+bw+0.6).toFixed(1)}" y2="${ty.toFixed(1)}" stroke="#e5e7eb" stroke-width="1.4" stroke-linecap="round" opacity="0.9"/>`;
       }
       if(n<=7){
-        body += `<text x="${(x+bw/2).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="9" fill="#6b7280" font-weight="700">${esc(d.date.toLocaleDateString('he-IL',{weekday:'narrow'}))}</text>`;
+        body += `<text x="${(x+bw/2).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="11" fill="#6b7280" font-weight="700">${esc(d.date.toLocaleDateString('he-IL',{weekday:'narrow'}))}</text>`;
       }
     });
     body += `<line x1="${padX}" y1="${base}" x2="${W-padX}" y2="${base}" stroke="#374151" stroke-width="1"/>`;
     if(n>7){
       const f = dt => dt.toLocaleDateString('he-IL',{day:'numeric',month:'numeric'});
-      body += `<text x="${W-padX}" y="${H-7}" text-anchor="end" font-size="9" fill="#6b7280" font-weight="700">${esc(f(series[0].date))}</text>`;
-      body += `<text x="${padX}" y="${H-7}" text-anchor="start" font-size="9" fill="#6b7280" font-weight="700">${esc(f(series[n-1].date))}</text>`;
+      body += `<text x="${W-padX}" y="${H-7}" text-anchor="end" font-size="11" fill="#6b7280" font-weight="700">${esc(f(series[0].date))}</text>`;
+      body += `<text x="${padX}" y="${H-7}" text-anchor="start" font-size="11" fill="#6b7280" font-weight="700">${esc(f(series[n-1].date))}</text>`;
     }
     // direction:ltr for the same reason as the weight chart: in an RTL page the two
     // date labels anchor to the opposite edges and render mostly outside the box.
@@ -8511,7 +8534,7 @@
     if(!d) return `<span class="text-[10px] font-bold text-gray-500">כמו שבוע שעבר</span>`;
     const good = moreIsBetter ? d>0 : d<0;
     const cls = good ? 'txt-green' : 'text-gray-500';
-    return `<span class="text-[10px] font-bold ${cls}">${d>0?'+':''}${fmt(d)}${unit||''} מול שבוע שעבר</span>`;
+    return `<span class="text-[10px] font-bold ${cls}"><bdi dir="ltr">${d>0?'+':''}${fmt(d)}</bdi>${unit||''} מול שבוע שעבר</span>`;
   }
   // One concrete, doable focus for next week — computed locally, phrased as an offer.
   function weekFocus(s){
@@ -8531,7 +8554,7 @@
     if(s.volume>0)   out.push('💪 נפח כוח ' + fmt(s.volume) + ' ק״ג');
     if(s.waterBest>0)out.push('💧 היום הכי מושקה: ' + s.waterBest + ' כוסות');
     if(prev && s.daysLogged > prev.daysLogged) out.push('📈 יותר ימי מעקב משבוע שעבר');
-    if(s.weightDelta!=null && s.weightDelta!==0) out.push('⚖️ ' + (s.weightDelta>0?'+':'') + s.weightDelta + ' ק״ג השבוע');
+    if(s.weightDelta!=null && s.weightDelta!==0) out.push('⚖️ ' + '⁦' + (s.weightDelta>0?'+':'') + s.weightDelta + '⁩ ק״ג השבוע');
     return out.slice(0,4);
   }
   function weekSummaryText(){
@@ -8544,7 +8567,7 @@
       '• מים: ' + s.waterAvg + ' כוסות בממוצע ב-' + s.waterDays + ' ימים',
       '• אימונים: ' + s.workouts + ' · ' + s.woMin + ' דק׳ · ' + s.woKcal + ' קל׳' + (s.volume?' · נפח ' + fmt(s.volume) + ' ק״ג':''),
     ];
-    if(s.weightDelta!=null) lines.push('• משקל: ' + (s.weightDelta>0?'+':'') + s.weightDelta + ' ק״ג');
+    if(s.weightDelta!=null) lines.push('• משקל: ' + '⁦' + (s.weightDelta>0?'+':'') + s.weightDelta + '⁩ ק״ג');
     return lines.join('\n');
   }
   function renderWeekSummary(){
@@ -8575,7 +8598,7 @@
         ${tile('אימונים', String(s.workouts), cmp(s.workouts, prev.workouts, '', true))}
         ${tile('מים ליום', s.waterAvg + ' כוסות', s.waterDays + ' ימים')}
         ${tile('נשרף באימון', fmt(s.woKcal) + ' קל׳', s.woMin + ' דק׳ · מעבר למנוחה')}
-        ${tile('משקל', s.weightDelta==null ? '—' : (s.weightDelta>0?'+':'') + s.weightDelta + ' ק״ג', s.weightEntries ? s.weightEntries + ' שקילות' : 'אין שקילות')}
+        ${tile('משקל', s.weightDelta==null ? '—' : '⁦' + (s.weightDelta>0?'+':'') + s.weightDelta + '⁩ ק״ג', s.weightEntries ? s.weightEntries + ' שקילות' : 'אין שקילות')}
       </div>
       ${hl.length ? `<div class="flex flex-wrap gap-1.5 mb-2">${hl.map(h=>`<span class="text-[10px] font-bold txt-sky bg-cyan-500/10 border border-cyan-500/30 rounded-full px-2 py-1">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="input-dark border border-emerald-500/30 rounded-xl px-3 py-2 mb-2">
@@ -8758,7 +8781,7 @@
               cell('ביעד', r.onTarget + '/' + logged, r.onTarget ? 'txt-green' : 'text-gray-500') +
               cell('חלבון ליום', r.avgP + 'g') +
               cell('אימונים', String(r.workouts)) +
-              cell('משקל', r.weightDelta == null ? '—' : (r.weightDelta>0?'+':'') + r.weightDelta, dCls) +
+              cell('משקל', r.weightDelta == null ? '—' : '⁦' + (r.weightDelta>0?'+':'') + r.weightDelta + '⁩', dCls) +
             '</div>') +
         '</div>';
       }).join('');
@@ -9430,7 +9453,7 @@
     b.className = (role==='user'
       ? 'btn-neon text-white'
       : 'glass text-gray-100') +
-      ' rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap max-w-[85%]';
+      ' rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap max-w-[85%] wrap-any';
     if(Array.isArray(atts) && atts.length){
       const box=document.createElement('div');
       box.className='flex flex-wrap gap-1.5' + (text ? ' mb-1.5' : '');
@@ -10273,6 +10296,14 @@
         todayKey, shiftKey, dateFromKey, renderAll, showToast, uid,
         pushState: k=> pushUserState(k),
         estKcal: estWorkoutKcal, estKcalNet: estWorkoutKcalNet,
+        netKcal: woNetKcal,
+        restKcal: minutes=> Math.round(profileWeight() * ((+minutes||0)/60)),   // the resting share of a burn
+        // Free-text activity → calorie estimate, through the same analyzer as the workout form.
+        aiActivity: desc=> callProxy({ mode:'workout', desc, weight: profileWeight() }, null),   // the sheet shows its own busy state
+        // Read only: how a burn touches today's food budget. The setting itself is never changed here.
+        kcalPrefs: ()=> ({ on: !!kcalMode, eatBack: !!kcalEatBack }),
+        openKcalSettings: ()=>{ openSettings(); setTimeout(()=>{ const r=$('kcalModeRow'); if(r) r.scrollIntoView({ block:'center', behavior:'smooth' }); }, 120); },
+        hasFood: day=> (allLogs[day]||[]).length > 0,
         userEmail: ()=> (user && user.email) || '',
         imageB64: f=> downscaleImage(f, 1600, 0.85),        // screenshots: big enough to read the text
         printHTML: html=>{

@@ -196,6 +196,7 @@ const TOOLS = [{
         type: 'object',
         properties: {
           kind: { type: 'string', enum: ['pilates','salsa','zumba','walk','other'] },
+          text: { type: 'string', description: 'מה בדיוק עשו, במילים חופשיות (חובה כש-kind הוא other, למשל: טניס, גינון)' },
           minutes: { type: 'number' }, day: { type: 'string', description: 'YYYY-MM-DD, ברירת מחדל היום' },
           instructor: { type: 'string' }, class_type: { type: 'string' },
           difficulty: { type: 'number', description: '1–10' }, enjoyment: { type: 'number', description: '1–10' },

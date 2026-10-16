@@ -25,7 +25,7 @@
     if(document.getElementById('celCss')) return;
     const s = document.createElement('style'); s.id = 'celCss';
     s.textContent = `
-#celOv{position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+#celOv{position:fixed;inset:0;z-index:9990;display:flex;align-items:safe center;overflow-y:auto;justify-content:center;padding:24px 16px;
   padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));
   background:rgba(4,5,10,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);animation:celFade .25s ease-out both}
 #celOv.out{animation:celFadeOut .22s ease-in both}

@@ -187,7 +187,7 @@
           e.sets.map((s,j)=> '<tr><td>' + (j+1) + '</td>' + (time ? '<td><input class="gy-in" type="number" inputmode="numeric" data-s="' + i + ':' + j + ':sec" value="' + (s.sec||'') + '"></td>'
             : '<td><input class="gy-in" type="number" inputmode="decimal" step="0.5" data-s="' + i + ':' + j + ':kg" value="' + (s.kg ?? '') + '"></td><td><input class="gy-in" type="number" inputmode="numeric" data-s="' + i + ':' + j + ':reps" value="' + (s.reps||'') + '"></td>') +
             '<td><input class="gy-in" type="number" inputmode="decimal" step="0.5" min="1" max="10" data-s="' + i + ':' + j + ':rpe" value="' + (s.rpe ?? '') + '"></td><td><button class="gy-btn gy-chip" data-rmset="' + i + ':' + j + '">−</button></td></tr>').join('') +
-          '</table><div class="gy-row mt-2"><button class="gy-btn gy-chip" data-addset="' + i + '">+ סט</button><input class="gy-in" placeholder="הערה לתרגיל" data-exnote="' + i + '" value="' + esc(e.note||'') + '"></div></div>';
+          '</table><div class="gy-row mt-2"><button class="gy-btn gy-chip" style="flex:none;white-space:nowrap" data-addset="' + i + '">+ סט</button><input class="gy-in" style="flex:1" placeholder="הערה לתרגיל" data-exnote="' + i + '" value="' + esc(e.note||'') + '"></div></div>';
       });
       h += '<button class="gy-btn mt-3" style="height:44px;width:100%" id="edAddEx">+ הוספת תרגיל</button>';
       h += '<button class="gy-btn gy-pri mt-4" style="height:56px;width:100%;font-size:17px" id="edSave">שמירה</button>';
@@ -348,9 +348,17 @@
   // One parser for every pasted workout: a trainer's plan, a .txt file, free notes.
   async function parsePlan(text, img){
     const lib = G.lib().map(e=> ({ id:e.id, he:e.he, en:e.en || '' }));
-    const r = await fetch('/api/gemini', { method:'POST', headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ mode:'trainerPlan', desc: text || '', mimeType: img && img.mimeType, data: img && img.data, lib, today: B().todayKey() }) });
-    const j = await r.json().catch(()=> ({}));
+    // A request that never answers (a stalled phone connection) used to leave the button on
+    // "מפענחים…" forever. After 45s it gives up with a clear message and the text stays.
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = setTimeout(()=>{ if(ac) ac.abort(); }, 45000);
+    let r, j;
+    try{
+      r = await fetch('/api/gemini', { method:'POST', headers:{ 'Content-Type':'application/json' }, signal: ac ? ac.signal : undefined,
+        body: JSON.stringify({ mode:'trainerPlan', desc: text || '', mimeType: img && img.mimeType, data: img && img.data, lib, today: B().todayKey() }) });
+      j = await r.json().catch(()=> ({}));
+    }catch(e){ throw new Error(e && e.name === 'AbortError' ? 'timeout' : 'net'); }
+    finally{ clearTimeout(timer); }
     if(!r.ok || !Array.isArray(j.exercises)) throw new Error(r.status ? 'server:' + r.status : 'net');
     if(!j.exercises.length) throw new Error('empty');
     const ex = j.exercises.map(e=>{
@@ -364,6 +372,7 @@
   }
   const parseErr = e=>{
     const m = String(e && e.message);
+    if(m === 'timeout') return 'הפענוח לקח יותר מדי זמן, כנראה בגלל החיבור. הטקסט נשמר כאן, ואפשר ללחוץ שוב.';
     if(m === 'empty') return 'לא מצאתי תרגילים בטקסט. אפשר לנסות שוב, או להוסיף ידנית.';
     if(m.indexOf('server') === 0) return 'שירות הפענוח לא הצליח כרגע (קוד ' + (m.split(':')[1] || '?') + '). אפשר לנסות שוב בעוד רגע.';
     return 'הפענוח נכשל. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.';
@@ -541,46 +550,170 @@
     return prev ? 'סומן בעבר כ"לא לחזור"' : '';
   }
   G.dislikedNote = dislikedNote;
+  // How a burn is counted: a number typed by hand wins, then the estimate from the free
+  // text, then the table estimate from type × intensity × minutes. Everything is the NET
+  // burn (above resting), the same number the app shows on a workout card.
+  function actLevel(rpe){ rpe = +rpe || 0; return !rpe ? 'mid' : rpe <= 4 ? 'low' : rpe <= 7 ? 'mid' : 'high'; }
+  function actBurn(d){
+    const b = B(), type = ACT_TYPE[d.kind] || 'other', level = actLevel(d.rpe);
+    const minutes = Math.max(1, Math.round(+d.minutes || 50));
+    const rest = b.restKcal ? b.restKcal(minutes) : 0;
+    if(d.kcalManual != null && d.kcalManual !== '' && +d.kcalManual >= 0){
+      const net = Math.round(+d.kcalManual);
+      return { net, gross: net + rest, src:'manual' };
+    }
+    if(d.ai && +d.ai.minutes > 0 && +d.ai.kcal > 0){
+      const gross = Math.round(+d.ai.kcal * minutes / +d.ai.minutes);   // same pace, new duration
+      return { net: Math.max(0, gross - rest), gross, src:'ai' };
+    }
+    return { net: b.estKcalNet(type, level, minutes), gross: b.estKcal(type, level, minutes), src:'table' };
+  }
+  // What this activity does to the day, in plain words. Read only: the food-budget setting
+  // is shown, never changed from here.
+  function actImpact(d, net, saved){
+    const b = B(), L = [];
+    const p = b.kcalPrefs ? b.kcalPrefs() : { on:false, eatBack:false };
+    const dayWord = d.day === b.todayKey() ? 'של היום' : 'של אותו יום';
+    if(!p.on) L.push({ t:'📊 נספר בשריפה היומית ובסיכומים. תקציב קלוריות לא מוצג אצלך, אז שום יעד אכילה לא משתנה.' });
+    else if(p.eatBack) L.push({ t:'➕ ' + net + ' קלוריות ' + (saved ? 'נוספו' : 'יתווספו') + ' לתקציב האכילה ' + dayWord + '.' });
+    else L.push({ t:'🍽️ תקציב האכילה ' + dayWord + ' לא משתנה: האפשרות להוסיף קלוריות מאימון כבויה אצלך.', link:true });
+    const kind = d.kind;
+    if(kind === 'pilates'){
+      const ws = G.weekStatus ? G.weekStatus() : null;
+      if(ws && +ws.pilatesTarget > 0) L.push({ t:'🌀 נספר ביעד הפילאטיס השבועי' + (saved ? ' (' + ws.pilates + ' מתוך ' + ws.pilatesTarget + ' השבוע)' : '') + '.' });
+      else L.push({ t:'🌀 נספר כאימון פילאטיס.' });
+    } else if(kind === 'salsa' || kind === 'zumba') L.push({ t:'💃 נספר כריקוד, גם בהישגים של ריקוד.' });
+    L.push({ t:'🤸 נספר באימונים, בנקודות ובהישגים.' });
+    const wkCount = ((b.workouts() || {})[d.day] || []).length;
+    if(b.hasFood && b.hasFood(d.day) && wkCount === (saved ? 1 : 0)) L.push({ t:'🔗 יחד עם האוכל שנרשם, זה יום פעיל: עוד 10 נקודות.' });
+    return L;
+  }
+  function impactHTML(L, form){
+    return L.map(x=> '<div style="font-size:13px;line-height:1.55;margin-top:4px">' + esc(x.t) +
+      (x.link && form ? '<div class="gy-mut" style="font-size:11px;margin-top:2px">משנים את זה בתפריט, ב"יעדים ופרופיל", באפשרות "להוסיף קלוריות מאימון".</div>' : '') +
+      (x.link && !form ? ' <button class="gy-btn gy-chip" data-kset style="height:28px;font-size:11px;padding:0 10px;margin-top:4px">איפה משנים את זה</button>' : '') + '</div>').join('');
+  }
   function saveActivity(d){
     const b = B();
     const kind = ACT_TYPE[d.kind] ? d.kind : 'other';
     const type = ACT_TYPE[kind];
     const rpe = +d.rpe || 0;
-    const level = !rpe ? 'mid' : rpe <= 4 ? 'low' : rpe <= 7 ? 'mid' : 'high';
+    const level = actLevel(rpe);
     const minutes = Math.max(1, Math.round(+d.minutes || 50));
-    const w = { id: b.uid(), type, level, minutes, kcal: b.estKcal(type, level, minutes), kcalNet: b.estKcalNet(type, level, minutes),
-      note: (ACT_LABEL[kind]||'').replace(/^\S+ /,'') + (d.classType ? ' · ' + d.classType : '') };
+    const text = String(d.text || '').trim().slice(0, 200);
+    const burn = actBurn(Object.assign({}, d, { kind, minutes }));
+    const base = kind === 'other' ? (text || 'פעילות אחרת') : (ACT_LABEL[kind]||'').replace(/^\S+ /,'') + (d.classType ? ' · ' + d.classType : '') + (text ? ' · ' + text : '');
+    const w = { id: b.uid(), type, level, minutes, kcal: burn.gross, kcalNet: burn.net, note: base };
     const day = d.day || b.todayKey();
     b.addWorkout(w, day);
-    S().activities[w.id] = { kind, day, instructor: d.instructor || '', classType: d.classType || '', rpe: rpe || null, enjoy: +d.enjoy || null, repeat: d.repeat == null ? null : !!d.repeat, at: Date.now() };
+    S().activities[w.id] = { kind, day, text, kcalSource: burn.src, instructor: d.instructor || '', classType: d.classType || '', rpe: rpe || null, enjoy: +d.enjoy || null, repeat: d.repeat == null ? null : !!d.repeat, at: Date.now() };
     G.save(); b.renderAll();
     return w;
   }
   G.saveActivity = saveActivity;
+  // Free-text activities typed before, most recent first, as one-tap chips.
+  function recentFree(){
+    const seen = new Set(), out = [];
+    Object.values(S().activities || {}).filter(a=> a && a.kind === 'other' && String(a.text||'').trim())
+      .sort((a,b)=> (+b.at||0) - (+a.at||0))
+      .forEach(a=>{ const t = String(a.text).trim(); const k = t.toLowerCase(); if(!seen.has(k) && out.length < 6){ seen.add(k); out.push(t); } });
+    return out;
+  }
   G.openActivity = function(){
-    const d = { kind:'pilates', minutes:50, instructor:'', classType:'', rpe:null, enjoy:null, repeat:null, day: B().todayKey() };
+    const tok = Math.random().toString(36).slice(2);
+    const d = { kind:'pilates', minutes:50, instructor:'', classType:'', text:'', rpe:null, enjoy:null, repeat:null, day: B().todayKey(), ai:null, kcalManual:null, err:'' };
     function html(){
       const grid = (key, from)=> '<div class="gy-rpe">' + Array.from({length: 11-from}, (_,i)=> i+from).map(i=> '<button class="gy-btn' + (d[key]===i?' on':'') + '" data-g="' + key + '" data-v="' + i + '">' + i + '</button>').join('') + '</div>';
       const warn = d.kind === 'pilates' ? dislikedNote(d.classType) : '';
+      const recent = recentFree();
+      const burn = actBurn(d);
+      const ph = d.kind === 'other' ? 'למשל: טניס, גינון, טיול עם הכלב, שיעור ריקוד' : 'פרטים, אם רוצים (לא חובה)';
       return '<div class="flex flex-wrap gap-2">' + Object.entries(ACT_LABEL).map(([k,l])=> '<button class="gy-btn gy-chip' + (d.kind===k?' on':'') + '" data-kind="' + k + '">' + l + '</button>').join('') + '</div>' +
-        '<div class="gy-grid2 mt-3"><label><div class="gy-lbl mb-1">תאריך</div><input class="gy-in" type="date" id="acDay" value="' + d.day + '" max="' + B().todayKey() + '"></label><label><div class="gy-lbl mb-1">דקות</div><input class="gy-in" type="number" id="acMin" value="' + d.minutes + '"></label></div>' +
-        (d.kind === 'pilates' ? '<div class="gy-grid2 mt-2"><label><div class="gy-lbl mb-1">מדריך/ה</div><input class="gy-in" id="acIns" value="' + esc(d.instructor) + '"></label><label><div class="gy-lbl mb-1">סוג השיעור</div><input class="gy-in" id="acCls" list="acClsList" value="' + esc(d.classType) + '"><datalist id="acClsList"><option value="פילאטיס מכשירים"><option value="פילאטיס מכשירים מודרני"><option value="פילאטיס מזרן"></datalist></label></div>' : '') +
+        (recent.length ? '<div class="gy-lbl mt-3 mb-1">ממה שרשמת בעבר</div><div class="flex flex-wrap gap-2">' + recent.map((t,i)=> '<button class="gy-btn gy-chip' + (d.kind==='other' && d.text===t ? ' on' : '') + '" data-recent="' + i + '">✨ ' + esc(t) + '</button>').join('') + '</div>' : '') +
+        '<label class="block mt-3"><div class="gy-lbl mb-1">' + (d.kind === 'other' ? 'מה עשית?' : 'מה עשית? (טקסט חופשי)') + '</div><textarea class="gy-in" id="acText" rows="2" maxlength="200" style="resize:none;line-height:1.5" placeholder="' + ph + '">' + esc(d.text) + '</textarea></label>' +
+        '<div class="gy-grid2 mt-3"><label><div class="gy-lbl mb-1">תאריך</div><input class="gy-in" type="date" id="acDay" value="' + d.day + '" max="' + B().todayKey() + '"></label><label><div class="gy-lbl mb-1">דקות</div><input class="gy-in" type="number" inputmode="numeric" id="acMin" value="' + d.minutes + '"></label></div>' +
+        (d.kind === 'pilates' ? '<div class="gy-grid2 mt-2"><label><div class="gy-lbl mb-1">שם המדריך או המדריכה</div><input class="gy-in" id="acIns" value="' + esc(d.instructor) + '"></label><label><div class="gy-lbl mb-1">סוג השיעור</div><input class="gy-in" id="acCls" list="acClsList" value="' + esc(d.classType) + '"><datalist id="acClsList"><option value="פילאטיס מכשירים"><option value="פילאטיס מכשירים מודרני"><option value="פילאטיס מזרן"></datalist></label></div>' : '') +
         (warn ? '<div class="gy-card gy-warn mt-2" style="padding:10px;font-size:12px">⚠️ ' + esc(warn) + '</div>' : '') +
         '<div class="font-black text-gray-100 mt-3 mb-1">קושי</div>' + grid('rpe', 1) +
+        // The burn and what it does to the day, visible before saving.
+        '<div class="gy-card mt-4" style="padding:14px">' +
+          '<div id="acBurnTop">' + burnTop() + '</div>' +
+          '<div class="gy-row mt-2" style="flex-wrap:wrap">' +
+            '<button class="gy-btn gy-chip" id="acAi" style="height:34px;font-size:12px"' + (d.busy || !String(d.text||'').trim() ? ' disabled' : '') + '>' + (d.busy ? '⏳ מחשבים…' : '✨ הערכה לפי התיאור') + '</button>' +
+            '<label class="gy-row" style="gap:6px;font-size:12px"><span class="gy-mut">תיקון ידני:</span><input class="gy-in" type="number" inputmode="numeric" id="acKcal" placeholder="' + burn.net + '" value="' + (d.kcalManual != null ? esc(d.kcalManual) : '') + '" style="width:90px;height:34px;padding:4px 8px"></label>' +
+          '</div>' +
+          '<div id="acBurnImpact">' + burnImpact() + '</div>' +
+        '</div>' +
         '<div class="font-black text-gray-100 mt-3 mb-1">הנאה</div>' + grid('enjoy', 1) +
         '<div class="font-black text-gray-100 mt-3 mb-1">לחזור על זה?</div><div class="flex gap-2"><button class="gy-btn gy-chip' + (d.repeat===true?' on':'') + '" data-rep="1">כן</button><button class="gy-btn gy-chip' + (d.repeat===false?' on':'') + '" data-rep="0">לא</button></div>' +
         '<button class="gy-btn gy-pri mt-5" style="height:56px;width:100%;font-size:17px" id="acSave">שמירה</button>';
     }
-    function grab(m){ const v = id=> (m.querySelector(id)||{}).value; d.day = v('#acDay') || d.day; d.minutes = +v('#acMin') || d.minutes; if(m.querySelector('#acIns')){ d.instructor = v('#acIns'); d.classType = v('#acCls'); } }
+    // The burn card is redrawn in place while typing, so the fields keep focus and a tap on
+    // "שמירה" right after typing is never swallowed by a re-render.
+    function burnTop(){
+      const burn = actBurn(d);
+      const srcTxt = burn.src === 'manual' ? 'המספר שהזנת' : burn.src === 'ai' ? 'הערכה לפי התיאור שלך' : 'הערכה לפי הסוג, המשך והקושי';
+      return '<div class="font-black text-gray-100" style="font-size:16px">🔥 בערך ' + burn.net + ' קלוריות</div>' +
+        '<div class="gy-mut" style="font-size:11px;margin-top:2px">' + srcTxt + ' · מעבר למה שהגוף שורף במנוחה</div>';
+    }
+    function burnImpact(){
+      return (d.err ? '<div class="gy-card gy-danger mt-2" style="padding:8px;font-size:12px">' + esc(d.err) + '</div>' : '') +
+        '<div class="font-black text-gray-100 mt-3" style="font-size:13px">מה זה עושה ליום שלך</div>' + impactHTML(actImpact(d, actBurn(d).net, false), true);
+    }
+    function grab(m){
+      const v = id=> (m.querySelector(id)||{}).value;
+      d.day = v('#acDay') || d.day;
+      const mins = Math.round(+v('#acMin') || 0); if(mins > 0) d.minutes = Math.min(600, mins);
+      const tx = m.querySelector('#acText'); if(tx){ if(tx.value !== d.text) d.ai = null; d.text = tx.value; }
+      const kc = m.querySelector('#acKcal'); if(kc) d.kcalManual = kc.value === '' ? null : Math.max(0, Math.min(5000, Math.round(+kc.value || 0)));
+      if(m.querySelector('#acIns')){ d.instructor = v('#acIns'); d.classType = v('#acCls'); }
+    }
+    function bindKset(m, close){ m.querySelectorAll('[data-kset]').forEach(x=> x.onclick = ()=>{ close(); B().openKcalSettings && B().openKcalSettings(); }); }
+    function done(w){
+      const burn = { net: Math.round(+w.kcalNet || 0) };
+      sheet('✓ הפעילות נרשמה', '<div class="gy-card" style="padding:14px"><div class="font-black text-gray-100" style="font-size:16px">🔥 ' + burn.net + ' קלוריות · ' + esc(w.note) + ' · ' + w.minutes + ' דק׳</div>' +
+        '<div class="font-black text-gray-100 mt-3" style="font-size:13px">מה זה עשה ליום שלך</div>' + impactHTML(actImpact(d, burn.net, true)) + '</div>' +
+        '<button class="gy-btn gy-pri mt-4" data-close style="height:52px;width:100%;font-size:16px">מעולה</button>', (m, close)=>{ bindKset(m, close); m.querySelectorAll('[data-close]').forEach(x=> x.onclick = close); }, 'gyActDone');
+    }
     function open(){
       sheet('רישום פעילות', html(), (m, close)=>{
-        const re = ()=>{ grab(m); m.remove(); open(); };
-        m.querySelectorAll('[data-kind]').forEach(b=> b.onclick = ()=>{ grab(m); d.kind = b.dataset.kind; d.minutes = d.kind === 'walk' ? 30 : d.kind === 'salsa' ? 90 : 50; m.remove(); open(); });
-        m.querySelectorAll('[data-g]').forEach(b=> b.onclick = ()=>{ d[b.dataset.g] = +b.dataset.v; re(); });
+        const re = ()=>{ grab(m); if(!m.isConnected) return; m.remove(); open(); };
+        const refresh = ()=>{
+          grab(m);
+          const top = m.querySelector('#acBurnTop'), imp = m.querySelector('#acBurnImpact'), ab = m.querySelector('#acAi');
+          if(top) top.innerHTML = burnTop();
+          if(imp){ imp.innerHTML = burnImpact(); bindKset(m, close); }
+          if(ab) ab.disabled = !!d.busy || !String(d.text||'').trim();
+          const kc = m.querySelector('#acKcal'); if(kc) kc.placeholder = String(actBurn(Object.assign({}, d, { kcalManual:null })).net);
+        };
+        m.querySelectorAll('[data-kind]').forEach(b=> b.onclick = ()=>{ grab(m); d.kind = b.dataset.kind; d.ai = null; d.err = ''; d.minutes = d.kind === 'walk' ? 30 : d.kind === 'salsa' ? 90 : d.kind === 'other' ? 45 : 50; m.remove(); open(); });
+        const rec = recentFree();
+        m.querySelectorAll('[data-recent]').forEach(b=> b.onclick = ()=>{ grab(m); d.kind = 'other'; d.text = rec[+b.dataset.recent] || ''; d.ai = null; m.remove(); open(); });
+        m.querySelectorAll('[data-g]').forEach(b=> b.onclick = ()=>{ d[b.dataset.g] = +b.dataset.v; if(b.dataset.g === 'rpe') d.ai = null; re(); });
         m.querySelectorAll('[data-rep]').forEach(b=> b.onclick = ()=>{ d.repeat = b.dataset.rep === '1'; re(); });
+        // Live numbers: minutes, a hand-typed burn or a new description redraw the estimate.
+        ['#acMin','#acKcal','#acText'].forEach(s=>{ const el = m.querySelector(s); if(el) el.oninput = refresh; });
+        const dayEl = m.querySelector('#acDay'); if(dayEl) dayEl.onchange = refresh;   // a date picker has no input stream
         const cls = m.querySelector('#acCls'); if(cls) cls.onchange = re;
-        m.querySelector('#acSave').onclick = ()=>{ grab(m); saveActivity(d); B().showToast('הפעילות נרשמה ✓'); close(); };
-      }, 'gyAct');
+        bindKset(m, close);
+        const ai = m.querySelector('#acAi');
+        if(ai) ai.onclick = async ()=>{
+          grab(m); d.busy = true; d.err = ''; re();
+          const desc = String(d.text).trim() + ' · ' + d.minutes + ' דקות' + (d.rpe ? ' · קושי ' + d.rpe + ' מתוך 10' : '');
+          try{
+            const r = await B().aiActivity(desc);
+            if(r && +r.kcal > 0){ d.ai = { kcal: Math.round(+r.kcal), minutes: Math.max(1, Math.round(+d.minutes || 50)) }; d.kcalManual = null; d.err = ''; }
+            else d.err = 'לא התקבלה הערכה. אפשר להזין מספר ידנית או להשאיר את ההערכה לפי הסוג.';
+          }catch(e){ d.err = 'ההערכה לא הצליחה כרגע. אפשר להזין מספר ידנית או לנסות שוב.'; }
+          d.busy = false;
+          const el = document.getElementById('gyAct'); if(el && el.dataset.tok === tok){ el.remove(); open(); }
+        };
+        m.querySelector('#acSave').onclick = ()=>{
+          grab(m);
+          if(d.kind === 'other' && !String(d.text).trim()){ d.err = ''; const t = m.querySelector('#acText'); if(t){ t.focus(); t.style.borderColor = '#ff5d73'; } B().showToast('כדאי לכתוב מה עשית'); return; }
+          const w = saveActivity(d); close(); done(w);
+        };
+      }, 'gyAct').dataset.tok = tok;
     }
     open();
   };
@@ -664,7 +797,7 @@
       h += '<div class="gy-grid2 mt-3"><button class="gy-btn gy-pri" style="height:46px" id="crPrint">🖨️ הדפסה / PDF</button><button class="gy-btn" style="height:46px" id="crCopy">העתקה כטקסט</button>' +
         '<button class="gy-btn" style="height:46px" id="crShare">שיתוף</button><button class="gy-btn" style="height:46px" id="crCsv">טבלה (CSV)</button></div>';
       sheet('📋 דוח למאמנת', h, (m)=>{
-        m.querySelectorAll('[data-mode]').forEach(b=> b.onclick = ()=>{ mode = b.dataset.mode; if(mode === 'custom'){ const rr = range(); from = rr.from; to = rr.to; } open(); });
+        m.querySelectorAll('[data-mode]').forEach(b=> b.onclick = ()=>{ const rr = range(); mode = b.dataset.mode; if(mode === 'custom'){ from = rr.from; to = rr.to; } open(); });   // range of the CURRENT mode, before switching
         ['#crFrom','#crTo'].forEach(s=>{ const i = m.querySelector(s); if(i) i.onchange = ()=>{ from = m.querySelector('#crFrom').value; to = m.querySelector('#crTo').value; open(); }; });
         m.querySelector('#crPrint').onclick = ()=>{ G.markReport && G.markReport(); B().printHTML(printWrap('דוח אימונים למאמנת', coachHTML(c))); };
         m.querySelector('#crCopy').onclick = ()=>{ G.markReport && G.markReport(); copy(coachText(c)); };
@@ -748,7 +881,7 @@
   }
   G.agentCard = function(action){
     const a = action.args || {};
-    if(action.name === 'log_activity') return { icon:'💃', title:'לרשום פעילות?', line: (ACT_LABEL[a.kind]||a.kind) + ' · ' + (a.minutes||50) + ' דק׳' + (a.class_type ? ' · ' + a.class_type : '') + (a.difficulty ? ' · קושי ' + a.difficulty : '') + (a.day ? ' · ' + dshort(a.day) : '') };
+    if(action.name === 'log_activity') return { icon:'💃', title:'לרשום פעילות?', line: (a.kind === 'other' && a.text ? a.text : (ACT_LABEL[a.kind]||a.kind)) + ' · ' + (a.minutes||50) + ' דק׳' + (a.class_type ? ' · ' + a.class_type : '') + (a.difficulty ? ' · קושי ' + a.difficulty : '') + (a.day ? ' · ' + dshort(a.day) : '') };
     if(action.name === 'feature_request') return { icon:'📝', title:'לשמור בקשה לשינוי באפליקציה?', line: String(a.text||''), confirm:'כן, לשמור ✓' };
     const ch = Array.isArray(a.changes) ? a.changes : [];
     return { icon:'🏋️', title: ch.length > 1 ? 'לבצע ' + ch.length + ' שינויים?' : 'לבצע את השינוי?', line: ch.map(describe).join('\n'), confirm:'כן, לבצע ✓' };
@@ -831,7 +964,7 @@
     const a = action.args || {}, b = B();
     try{
       if(action.name === 'log_activity'){
-        saveActivity({ kind: ACT_TYPE[a.kind] ? a.kind : 'other', minutes: a.minutes, instructor: a.instructor, classType: a.class_type, rpe: a.difficulty, enjoy: a.enjoyment, repeat: a.would_repeat, day: /^\d{4}-\d{2}-\d{2}$/.test(a.day||'') && a.day <= b.todayKey() ? a.day : null });
+        saveActivity({ kind: ACT_TYPE[a.kind] ? a.kind : 'other', text: a.text || '', minutes: a.minutes, instructor: a.instructor, classType: a.class_type, rpe: a.difficulty, enjoy: a.enjoyment, repeat: a.would_repeat, day: /^\d{4}-\d{2}-\d{2}$/.test(a.day||'') && a.day <= b.todayKey() ? a.day : null });
         const warn = a.kind === 'pilates' ? dislikedNote(a.class_type) : '';
         return 'הפעילות נרשמה ✓' + (warn ? '\n⚠️ ' + warn : '');
       }

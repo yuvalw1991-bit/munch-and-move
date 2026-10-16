@@ -216,7 +216,7 @@
     const sets = entry.sets || [];
     if(e && e.kind === 'time') return sets.map(s=> fmtSec(s.sec)).join(' + ');
     const st = entryStats(entry);
-    if(st.mixed) return sets.map(s=> (s.kg? r2(s.kg) : 0) + '×' + (s.reps||'?')).join(', ') + ' ק״ג';
+    if(st.mixed) return ltr(sets.map(s=> (s.kg? r2(s.kg) : 0) + '×' + (s.reps||'?')).join(', ')) + ' ק״ג';   // isolated, or RTL shows 12×60
     const reps = sets.map(s=> +s.reps||0);
     const same = reps.every(r=> r === reps[0]);
     return fmtKg(st.top) + ' · ' + ltr(same ? sets.length + '×' + (reps[0]||'?') : reps.join('/')) + (e && e.perSide ? ' לכל צד' : '');
