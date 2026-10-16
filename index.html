@@ -1286,9 +1286,9 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=2"></script>
-<script src="gym-ui.js?v=2"></script>
-<script src="gym-views.js?v=2"></script>
+<script src="gym-core.js?v=3"></script>
+<script src="gym-ui.js?v=3"></script>
+<script src="gym-views.js?v=3"></script>
 <script>
 (function(){
   'use strict';
@@ -9979,6 +9979,7 @@
         pushState: k=> pushUserState(k),
         estKcal: estWorkoutKcal, estKcalNet: estWorkoutKcalNet,
         userEmail: ()=> (user && user.email) || '',
+        imageB64: f=> downscaleImage(f, 1600, 0.85),        // screenshots: big enough to read the text
         printHTML: html=>{
           if(typeof window.print !== 'function'){ showToast('הדפדפן הזה לא תומך בהדפסה — אפשר להעתיק כטקסט'); return; }
           $('printArea').innerHTML = html;

@@ -34,7 +34,7 @@
   function woTitle(w){
     const m = S().sessions[w.id] || {}, a = S().activities[w.id];
     if(a) return ACT_LABEL[a.kind] || 'פעילות';
-    if(m.trainer) return '👩‍🏫 ' + (m.title || 'אימון עם המאמנת');
+    if(m.trainer) return '👩‍🏫 ' + (w.note || m.title || 'אימון עם ' + coachWord());
     if(m.label) return '⁨' + (/^[ABC]$/.test(m.label) ? 'Full Body ' + m.label : m.label) + '⁩';
     return (w.note || 'אימון').split(' · ')[0];
   }
@@ -43,6 +43,7 @@
     const st = G.entryStats(e);
     return { id, name: x ? x.he : e.name, sets: G.setsLine(e, x), rpe: st.rpe, note: e.note || '' };
   }
+  const coachWord = ()=> G.isOwner && G.isOwner() ? 'המאמנת' : 'המאמן/ת';
   function woMeta(w){
     const m = S().sessions[w.id] || {}, a = S().activities[w.id];
     const p = [];
@@ -145,11 +146,13 @@
   }
 
   // ---------- editor ----------
-  G.openEditor = function(day, woId){
+  G.openEditor = function(day, woId, eopts){
+    eopts = eopts || {};
     const all = B().workouts();
     const orig = woId ? (all[day]||[]).find(w=> w.id === woId) : null;
     const lib = G.lib();
-    const draft = {
+    const pre = eopts.prefill || null;
+    const draft = pre ? { day: pre.day || day, minutes: pre.minutes || 60, note: pre.note || 'אימון עם ' + coachWord(), ex: pre.ex } : {
       day, minutes: orig ? (orig.minutes || 0) : 55, note: orig ? (orig.note || '') : 'Full Body',
       // Keep each entry's own name and id; the library match is only a default for the
       // picker, and an entry is renamed only when the picker is actually changed.
@@ -161,9 +164,11 @@
         '<label><div class="gy-lbl mb-1">דקות</div><input class="gy-in" type="number" inputmode="numeric" id="edMin" value="' + draft.minutes + '"></label></div>' +
         '<label class="block mt-2"><div class="gy-lbl mb-1">כותרת / הערה</div><input class="gy-in" id="edNote" value="' + esc(draft.note) + '"></label>';
       draft.ex.forEach((e, i)=>{
-        const x = G.ex(e.exId); const time = x && x.kind === 'time';
+        const x = G.ex(e.exId); const time = x ? x.kind === 'time' : e.kind === 'time';
         h += '<div class="gy-card mt-3" style="padding:12px"><div class="gy-row"><select class="gy-in" data-exsel="' + i + '">' + opts(e.exId) + '</select><button class="gy-btn gy-chip gy-danger" data-rmex="' + i + '">✕</button></div>' +
-          (!e.exId ? '<input class="gy-in mt-2" placeholder="שם התרגיל" data-exname="' + i + '" value="' + esc(e.name||'') + '">' : '') +
+          (!e.exId ? '<input class="gy-in mt-2" placeholder="שם התרגיל" data-exname="' + i + '" value="' + esc(e.name||'') + '">' +
+            (e.isNew ? '<div class="gy-row mt-2"><span class="text-[11px] txt-amber font-bold">🆕 תרגיל חדש — יתווסף למעקב</span><select class="gy-in" style="width:auto" data-exarea="' + i + '">' + Object.entries(G.AREAS).map(([k,l])=> '<option value="' + k + '"' + (k===e.area?' selected':'') + '>' + l + '</option>').join('') + '</select></div>' +
+              '<label class="gy-row mt-1 text-[11px] gy-mut"><input type="checkbox" data-exrot="' + i + '"' + (e.rotation?' checked':'') + '> להכניס אותו גם לאימונים העצמאיים שלי</label>' : '') : '') +
           '<table class="gy-tbl mt-2"><tr><th>סט</th>' + (time ? '<th>שניות</th>' : '<th>ק״ג</th><th>חזרות</th>') + '<th>קושי</th><th></th></tr>' +
           e.sets.map((s,j)=> '<tr><td>' + (j+1) + '</td>' + (time ? '<td><input class="gy-in" type="number" inputmode="numeric" data-s="' + i + ':' + j + ':sec" value="' + (s.sec||'') + '"></td>'
             : '<td><input class="gy-in" type="number" inputmode="decimal" step="0.5" data-s="' + i + ':' + j + ':kg" value="' + (s.kg ?? '') + '"></td><td><input class="gy-in" type="number" inputmode="numeric" data-s="' + i + ':' + j + ':reps" value="' + (s.reps||'') + '"></td>') +
@@ -181,6 +186,8 @@
       m.querySelectorAll('[data-s]').forEach(inp=>{ const [i,j,k] = inp.dataset.s.split(':'); const v = inp.value === '' ? undefined : parseFloat(inp.value); draft.ex[+i].sets[+j][k] = v; });
       m.querySelectorAll('[data-exname]').forEach(inp=>{ draft.ex[+inp.dataset.exname].name = inp.value; });
       m.querySelectorAll('[data-exnote]').forEach(inp=>{ draft.ex[+inp.dataset.exnote].note = inp.value; });
+      m.querySelectorAll('[data-exarea]').forEach(sel=>{ draft.ex[+sel.dataset.exarea].area = sel.value; });
+      m.querySelectorAll('[data-exrot]').forEach(cb=>{ draft.ex[+cb.dataset.exrot].rotation = cb.checked; });
     }
     function bind(m, close){
       const rerender = ()=>{ m.querySelector('.gy-sheet').lastElementChild && null; m.remove(); open(); };
@@ -191,6 +198,19 @@
       m.querySelector('#edAddEx').onclick = ()=>{ collect(m); draft.ex.push({ exId:'', name:'', note:'', sets:[{ kg:0, reps:10 }, { kg:0, reps:10 }] }); rerender(); };
       m.querySelector('#edSave').onclick = ()=>{
         collect(m);
+        // New exercises from a trainer's plan join the library (and so the tracking and
+        // the rotation) before the workout is saved, so their sets count from day one.
+        const filled = e=> (e.sets||[]).some(s=> +s.reps > 0 || +s.sec > 0 || +s.kg > 0);
+        draft.ex.forEach(e=>{
+          if(e.exId || !e.isNew || !String(e.name||'').trim() || !filled(e)) return;
+          const known = G.matchId(e.name) || (e.en ? G.matchId(e.en) : null);
+          // Tracked from now on; joins the self-made workouts only when asked (a machine
+          // or cable station may exist only at the trainer's studio).
+          e.exId = known || G.addCustom({ he:String(e.name).trim(), en:e.en || '', area:e.area || 'legs', kind:e.kind === 'time' ? 'time' : 'reps', perSide:!!e.perSide, active: !!e.rotation });
+          e.picked = true;
+        });
+        if(eopts.trainer && draft.day !== (eopts.prefill || {}).day && (B().workouts()[draft.day] || []).some(w=> (S().sessions[w.id] || {}).trainer))
+          B().showToast('שימו לב: כבר יש אימון עם ' + coachWord() + ' ביום הזה — זה יישמר כאימון נוסף');
         const exercises = draft.ex.map(e=>{
           const x = G.ex(e.exId);
           // Every field a set had is kept (a timed set keeps its reps, a rep set keeps its
@@ -216,12 +236,110 @@
         } else {
           const w = { id: b.uid(), type:'gym', level:'mid', minutes: draft.minutes, kcal: draft.minutes ? b.estKcal('gym','mid',draft.minutes) : 0, kcalNet: draft.minutes ? b.estKcalNet('gym','mid',draft.minutes) : 0, note: draft.note || 'Full Body', exercises };
           b.addWorkout(w, draft.day);
-          S().sessions[w.id] = { day: draft.day, manual:true, at: Date.now() }; G.save();
+          S().sessions[w.id] = eopts.trainer ? { day: draft.day, trainer:true, title: draft.note || 'אימון עם ' + coachWord(), source: eopts.source || '', at: Date.now() }
+                                             : { day: draft.day, manual:true, at: Date.now() };
+          G.save();
         }
-        b.showToast('נשמר ✓'); close(); refreshHist(); G.openDay(draft.day);
+        const added = draft.ex.filter(e=> e.isNew && e.exId).length;
+        b.showToast(eopts.trainer ? 'האימון עם ' + coachWord() + ' נשמר ✓' + (added ? ' · ' + added + ' תרגילים חדשים נוספו למעקב' : '') : 'נשמר ✓');
+        close(); refreshHist(); G.openDay(draft.day); b.renderAll();
       };
     }
-    function open(){ sheet(orig ? 'עריכת אימון' : 'אימון בדיעבד', html(), bind, 'gyEdit'); }
+    function open(){ sheet(orig ? 'עריכת אימון' : (eopts.trainer ? '👩‍🏫 בדיקה לפני שמירה' : 'אימון בדיעבד'), (eopts.trainer ? '<div class="text-[12px] gy-mut mb-3" style="margin-top:-6px">כך הבנתי את התוכנית. אפשר לתקן כל מספר, ואז לשמור.</div>' : '') + html(), bind, 'gyEdit'); }
+    open();
+  };
+
+  // ---------- trainer session import (WhatsApp text and/or screenshot) ----------
+  const STEPS_DEFAULT = [0,2.5,5,7.5,9,10,12.5,14,15,17.5,18,19,20,22.5,23,25,27,30,32,35,36,40,41,45,50,54,55,59,60];
+  G.addCustom = function(def){
+    const id = 'c_' + B().uid().replace(/-/g,'').slice(0, 8);
+    const AREA_SLOT_ = { legs:'quad', glutes:'post', back:'back', chest:'chest', shoulders:'shoulders', core:'core2', arms:'arms' };
+    S().custom.push({ id, he:def.he, en:def.en || '', area: G.AREAS[def.area] ? def.area : 'legs', slot: AREA_SLOT_[def.area] || 'quad', route: 9, kind: def.kind === 'time' ? 'time' : 'reps',
+      lo: def.kind === 'time' ? 30 : 10, hi: def.kind === 'time' ? 60 : 15, steps: STEPS_DEFAULT, rest: 75, icon:'🆕', perSide: !!def.perSide, addedAt: B().todayKey(),
+      active: def.active === undefined ? true : !!def.active });
+    G.save();
+    return id;
+  };
+  // Width-limited, not longest-side-limited: a long WhatsApp scroll capture (1080×5400)
+  // would otherwise shrink to ~320px wide and the text would be unreadable.
+  function shotB64(file){
+    return new Promise((resolve, reject)=>{
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = ()=>{
+        const k = Math.min(1, 1200 / img.width, 4000 / img.height);
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('img')); };
+      img.src = url;
+    });
+  }
+  G.openTrainerImport = function(){
+    const st = { text:'', img:null, imgUrl:'', day: B().todayKey(), minutes: 60, busy:false, err:'' };
+    function html(){
+      return '<div class="text-[12px] gy-mut leading-relaxed" style="margin-top:-6px">אפשר להדביק כאן את התוכנית של ' + coachWord() + ' כמו שהגיעה בוואטסאפ, או להעלות צילום מסך שלה. המערכת תפענח אותה ותציג לבדיקה לפני שמירה.</div>' +
+        '<textarea id="tiText" class="gy-in mt-3" style="min-height:160px;line-height:1.6" placeholder="למשל:\nלחיצת רגליים במכונה\n15 ק״ג 15 חז 3 סטים\n...">' + esc(st.text) + '</textarea>' +
+        '<div class="gy-row mt-2"><label class="gy-btn gy-chip" style="cursor:pointer">📷 צילום מסך<input id="tiImg" type="file" accept="image/*" style="display:none"></label>' +
+          (st.imgUrl ? '<img src="' + st.imgUrl + '" style="height:56px;border-radius:10px;border:1px solid rgba(255,255,255,.15)"><button class="gy-btn gy-chip" id="tiImgX">✕</button>' : '') + '</div>' +
+        '<div class="gy-grid2 mt-3"><label><div class="gy-lbl mb-1">תאריך האימון</div><input class="gy-in" type="date" id="tiDay" value="' + st.day + '" max="' + B().todayKey() + '"></label>' +
+          '<label><div class="gy-lbl mb-1">דקות</div><input class="gy-in" type="number" inputmode="numeric" id="tiMin" value="' + st.minutes + '"></label></div>' +
+        '<div class="text-[11px] gy-mut mt-1">אם יש תאריך בתוכנית עצמה, הוא ייבחר אוטומטית.</div>' +
+        (st.err ? '<div class="gy-card gy-danger mt-3" style="padding:10px;font-size:12px">' + esc(st.err) + '</div>' : '') +
+        '<button id="tiGo" class="gy-btn gy-pri mt-4" style="height:56px;width:100%;font-size:17px"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? '⏳ מפענחים את התוכנית…' : 'פענוח התוכנית') + '</button>';
+    }
+    function grab(m){ st.text = m.querySelector('#tiText').value; st.day = m.querySelector('#tiDay').value || st.day; st.minutes = Math.max(10, Math.round(+m.querySelector('#tiMin').value || 60)); }
+    function open(){
+      sheet('👩‍🏫 אימון עם ' + coachWord().replace(/^ה/, ''), html(), (m, close)=>{
+        const re = ()=>{ grab(m); m.remove(); open(); };
+        m.querySelector('#tiImg').onchange = async ev=>{
+          const f = ev.target.files && ev.target.files[0]; if(!f) return;
+          grab(m);
+          try{ st.img = { mimeType:'image/jpeg', data: await shotB64(f) }; st.imgUrl = 'data:image/jpeg;base64,' + st.img.data; st.err = ''; }
+          catch(e){ st.err = 'לא הצלחתי לקרוא את התמונה'; }
+          m.remove(); open();
+        };
+        const x = m.querySelector('#tiImgX'); if(x) x.onclick = ()=>{ st.img = null; st.imgUrl = ''; re(); };
+        m.querySelector('#tiGo').onclick = async ()=>{
+          grab(m);
+          if(!st.text.trim() && !st.img){ st.err = 'צריך להדביק את התוכנית או להעלות צילום מסך'; re(); return; }
+          st.busy = true; st.err = ''; m.remove(); open();
+          try{
+            const lib = G.lib().map(e=> ({ id:e.id, he:e.he, en:e.en || '' }));
+            const r = await fetch('/api/gemini', { method:'POST', headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ mode:'trainerPlan', desc: st.text, mimeType: st.img && st.img.mimeType, data: st.img && st.img.data, lib, today: B().todayKey() }) });
+            const j = await r.json().catch(()=> ({}));
+            if(!r.ok || !Array.isArray(j.exercises)) throw new Error(r.status ? 'server' : 'net');
+            if(!j.exercises.length) throw new Error('empty');
+            const day = (j.date && j.date <= B().todayKey()) ? j.date : st.day;
+            const ex = j.exercises.map(e=>{
+              const known = e.match && G.ex(e.match) ? e.match : (G.matchId(e.name) || (e.en ? G.matchId(e.en) : null));
+              const kx = known ? G.ex(known) : null;
+              const time = kx ? kx.kind === 'time' : e.kind === 'time';
+              return { exId: known || '', isNew: !known, name: kx ? G.exName(kx) : e.name, en: e.en, area: e.area, kind: e.kind, perSide: e.perSide, note: e.note || '',
+                sets: e.sets.map(s=> time ? { kg:0, reps: s.reps || 0, sec: s.seconds || 0 } : { kg: s.kg || 0, reps: s.reps || 0, sec: s.seconds || 0 }), picked: true };
+            });
+            const dupe = (B().workouts()[day] || []).some(w=> (S().sessions[w.id] || {}).trainer);
+            st.busy = false;
+            const sheetEl = document.getElementById('gyTrainer');
+            if(!sheetEl) return;                         // closed while waiting — don't pop anything up
+            sheetEl.remove();
+            if(dupe) B().showToast('שימו לב: כבר יש אימון עם ' + coachWord() + ' ביום הזה — זה יישמר כאימון נוסף');
+            else if(j.date && j.date !== st.day && j.date <= B().todayKey()) B().showToast('התאריך נלקח מהתוכנית: ' + dshort(j.date));
+            G.openEditor(day, null, { trainer:true, source: st.img ? 'screenshot' : 'text',
+              prefill: { day, minutes: st.minutes, note: (j.title || 'אימון עם ' + coachWord()) + (j.notes ? ' · ' + j.notes : ''), ex } });
+          }catch(e){
+            st.busy = false;
+            const msg = String(e && e.message);
+            st.err = msg === 'empty' ? 'לא מצאתי תרגילים בתוכנית. אפשר לנסות שוב, או להוסיף ידנית.'
+              : msg === 'server' ? 'שירות הפענוח לא הצליח כרגע. אפשר לנסות שוב בעוד רגע.'
+              : 'הפענוח נכשל. כדאי לבדוק את החיבור לאינטרנט ולנסות שוב.';
+            const mm = document.getElementById('gyTrainer'); if(!mm) return; mm.remove(); open();
+          }
+        };
+      }, 'gyTrainer');
+    }
     open();
   };
 

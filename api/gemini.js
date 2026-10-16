@@ -112,6 +112,40 @@ const WORKOUT_SYS =
   'תמיד תן הערכה מספרית מציאותית; לעולם אל תחזיר אפס עבור אימון אמיתי. ' +
   'כל הטקסט בעברית. החזר מספרים בלבד בשדות המספריים, ללא יחידות.';
 
+// Trainer's session plan (pasted WhatsApp text and/or a screenshot) → structured sets.
+const TRAINER_SCHEMA = {
+  type: 'object',
+  properties: {
+    date: { type: 'string', description: 'YYYY-MM-DD if a date appears, otherwise empty' },
+    title: { type: 'string' },
+    notes: { type: 'string' },
+    exercises: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          en: { type: 'string' },
+          match: { type: 'string', description: 'id from the library list, or empty when it is a new exercise' },
+          area: { type: 'string', enum: ['legs', 'glutes', 'back', 'chest', 'shoulders', 'core', 'arms'] },
+          kind: { type: 'string', enum: ['reps', 'time'] },
+          perSide: { type: 'boolean' },
+          note: { type: 'string' },
+          sets: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { kg: { type: 'number' }, reps: { type: 'number' }, seconds: { type: 'number' } },
+            },
+          },
+        },
+        required: ['name', 'sets'],
+      },
+    },
+  },
+  required: ['exercises'],
+};
+
 const WORKOUT_SCHEMA = {
   type: 'OBJECT',
   properties: {
@@ -350,6 +384,68 @@ export default async function handler(req, res) {
         done: true,
         video: buf.toString('base64'),
         mimeType: dl.headers.get('content-type') || 'video/mp4',
+      });
+    } catch (e) {
+      return res.status(500).json({ error: 'server_error', detail: String(e).slice(0, 300) });
+    }
+  }
+
+  if (mode === 'trainerPlan') {
+    const text = String(desc || '').slice(0, 8000);
+    if (!text && !data) return res.status(400).json({ error: 'no_input' });
+    const lib = (Array.isArray(body && body.lib) ? body.lib : []).filter((e) => e && typeof e === 'object').slice(0, 120);
+    const today = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.today) || '')) ? body.today : '';
+    const libTxt = lib.map((e) => String(e.id || '').slice(0, 40) + ' = ' + String(e.he || '').slice(0, 60) + (e.en ? ' / ' + String(e.en).slice(0, 60) : '')).join('\n');
+    const prompt =
+      'לפניך תוכנית של אימון כוח שמאמנת שלחה (טקסט מוואטסאפ ו/או צילום מסך). חלץ כל תרגיל עם הסטים שלו.\n' +
+      'כללים: "12 חז 2 סטים" = שני סטים של 12 חזרות. "15 ק״ג" = kg 15. זמן כמו "1:33" או "1.03" בפלאנק = שניות (93, 63) ו-kind=time. ' +
+      'כשסטים שונים זה מזה — סט נפרד לכל אחד. "10 חז כל צד" = perSide true. בלי משקל = kg 0. ' +
+      'חימום, הליכה ושחרור אינם תרגילים — אל תכלול אותם. סופר סט: כל תרגיל בנפרד, והערה "סופר סט". ' +
+      'הערות כמו מכשיר, תנוחה, מנוחה או "5 שניות סטטי" — לשדה note. ' +
+      'match: המזהה מרשימת המאגר כשמדובר באותו תרגיל (גם בניסוח אחר, למשל "לחיצות רגליים במכונה" = leg_press, "היפטראס" = hip_thrust, "משיכה/חתירה במכונה סלקטור" = selector_row). ' +
+      'תרגיל שלא ברשימה — match ריק, name בעברית, en באנגלית, ו-area לפי השריר העיקרי. ' +
+      'date: התאריך שמופיע בתוכנית בפורמט YYYY-MM-DD' + (today ? ' (היום ' + today + '; שנה בשתי ספרות היא 20XX)' : '') + ', ריק אם אין. ' +
+      'title: כותרת קצרה (למשל "אימון אישי #4"). notes: הערה כללית אם יש (למשל טווח קושי).\n\n' +
+      'המאגר:\n' + libTxt + (text ? '\n\nהתוכנית:\n' + text : '');
+    const tParts = [{ text: prompt }];
+    if (data) tParts.push({ inlineData: { mimeType: mimeType || 'image/jpeg', data } });
+    try {
+      const gRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent?key=' + encodeURIComponent(key), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: tParts }],
+          generationConfig: { responseMimeType: 'application/json', responseSchema: TRAINER_SCHEMA, temperature: 0.1, thinkingConfig: { thinkingBudget: 512 } },
+        }),
+      });
+      if (!gRes.ok) {
+        let detail = '';
+        try { detail = (await gRes.json())?.error?.message || ''; } catch {}
+        return res.status(502).json({ error: 'gemini_error', status: gRes.status, detail });
+      }
+      const gData = await gRes.json();
+      const txt = gData?.candidates?.[0]?.content?.parts?.find((x) => typeof x.text === 'string')?.text;
+      if (!txt) return res.status(502).json({ error: 'empty_response' });
+      const parsed = JSON.parse(txt);
+      const ids = new Set(lib.map((e) => String(e.id)));
+      const AREAS = ['legs', 'glutes', 'back', 'chest', 'shoulders', 'core', 'arms'];
+      const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v) * 100) / 100 : 0);
+      const exercises = (Array.isArray(parsed.exercises) ? parsed.exercises : []).map((e) => ({
+        name: String(e.name || '').trim().slice(0, 80),
+        en: String(e.en || '').trim().slice(0, 60),
+        match: ids.has(String(e.match || '')) ? String(e.match) : '',
+        area: AREAS.includes(e.area) ? e.area : 'legs',
+        kind: e.kind === 'time' ? 'time' : 'reps',
+        perSide: !!e.perSide,
+        note: String(e.note || '').trim().slice(0, 160),
+        sets: (Array.isArray(e.sets) ? e.sets : []).slice(0, 10).map((x) => ({ kg: num(x.kg), reps: Math.round(num(x.reps)), seconds: Math.round(num(x.seconds)) }))
+          .filter((x) => x.reps > 0 || x.seconds > 0 || x.kg > 0),
+      })).filter((e) => e.name && e.sets.length).slice(0, 25);
+      return res.status(200).json({
+        date: /^\d{4}-\d{2}-\d{2}$/.test(String(parsed.date || '')) ? parsed.date : '',
+        title: String(parsed.title || '').trim().slice(0, 60),
+        notes: String(parsed.notes || '').trim().slice(0, 200),
+        exercises,
       });
     } catch (e) {
       return res.status(500).json({ error: 'server_error', detail: String(e).slice(0, 300) });

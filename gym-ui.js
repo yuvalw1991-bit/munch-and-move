@@ -114,7 +114,8 @@
       '<button id="gyActBtn" class="gy-btn" style="height:46px;font-size:13px">💃 רישום פעילות</button>' +
       '<button id="gyHistBtn" class="gy-btn" style="height:46px;font-size:13px">📅 היסטוריה</button>' +
       '<button id="gyTrackBtn" class="gy-btn" style="height:46px;font-size:13px">📈 מעקב תרגילים</button>' +
-      '<button id="gyCoachBtn" class="gy-btn" style="height:46px;font-size:13px">📋 ' + (G.isOwner() ? 'דוח למאמנת' : 'דוח למאמן/ת') + '</button></div>';
+      '<button id="gyCoachBtn" class="gy-btn" style="height:46px;font-size:13px">📋 ' + (G.isOwner() ? 'דוח למאמנת' : 'דוח למאמן/ת') + '</button></div>' +
+      '<button id="gyTrainerBtn" class="gy-btn mt-2" style="height:46px;font-size:13px;width:100%">👩‍🏫 ' + (G.isOwner() ? 'אימון עם מאמנת · הדבקת התוכנית' : 'אימון עם מאמן/ת · הדבקת התוכנית') + '</button>';
     if(G.isOwner() && +G.state().seeded < 1) h += '<button id="gySeed" class="gy-btn gy-warn mt-3" style="height:44px;width:100%;font-size:13px">📥 טעינת ההיסטוריה שלי (28.9–15.10)</button>';
     const reqs = (G.state().requests || []).filter(r=> !r.done);
     if(reqs.length) h += '<div class="text-[11px] gy-mut mt-3">📝 ' + reqs.length + ' בקשות לשינוי באפליקציה נשמרו מהעוזר</div>';
@@ -128,6 +129,7 @@
     on('gyHistBtn', ()=> G.openHistory && G.openHistory());
     on('gyTrackBtn', ()=> G.openTracking && G.openTracking());
     on('gyCoachBtn', ()=> G.openCoachReport && G.openCoachReport());
+    on('gyTrainerBtn', ()=> G.openTrainerImport && G.openTrainerImport());
     box.querySelectorAll('[data-gyex]').forEach(li=> li.onclick = ()=> G.openExercise && G.openExercise(li.dataset.gyex));
   };
 
