@@ -723,7 +723,7 @@
         const ai = m.querySelector('#acAi');
         if(ai) ai.onclick = async ()=>{
           grab(m); d.busy = true; d.err = ''; re();
-          const desc = String(d.text).trim() + ' · ' + d.minutes + ' דקות' + (d.rpe ? ' · קושי ' + d.rpe + ' מתוך 10' : '');
+          const desc = String(d.text).trim().slice(0, 800) + ' · ' + d.minutes + ' דקות' + (d.rpe ? ' · קושי ' + d.rpe + ' מתוך 10' : '');
           try{
             const r = await B().aiActivity(desc);
             if(r && +r.kcal > 0){ d.ai = { kcal: Math.round(+r.kcal), minutes: Math.max(1, Math.round(+d.minutes || 50)) }; d.kcalManual = null; d.err = ''; }
