@@ -280,6 +280,9 @@
   <!-- Hydration -->
   <div id="waterCard" class="glass-hl rounded-2xl px-4 py-3 mb-5"></div>
 
+  <!-- Quick weigh-in -->
+  <div id="todayWeightCard" class="glass-hl rounded-2xl px-4 py-3 mb-5"></div>
+
   <!-- Rings dashboard -->
   <section id="rings" class="grid grid-cols-3 gap-3 mb-5"></section>
 
@@ -406,8 +409,16 @@
   <!-- ===== TAB: אימונים (workouts) ===== -->
   <div id="tab-workouts" data-tab class="hidden lg:max-w-2xl lg:mx-auto">
 
+    <!-- Gym: start button, week status, history, reports (rendered by gym-ui.js) -->
+    <div id="gymHome"></div>
+
     <!-- Today's session, straight from the active program -->
     <div id="todayPlanCard" class="mb-5 hidden"></div>
+
+    <!-- The older manual tools stay available, folded away under the live mode -->
+    <details id="woTools" class="mb-5">
+    <summary class="text-xs font-black text-gray-400 px-1 py-2" style="cursor:pointer">🧰 רישום ידני וכלים נוספים</summary>
+    <div class="mt-3">
 
     <!-- Workout logger -->
     <section class="glass-hl rounded-2xl p-4 mb-5">
@@ -494,6 +505,9 @@
       <div id="mbList" class="space-y-2 mb-2"></div>
       <button id="mbAddBtn" class="glow-green w-full bg-gradient-to-l from-emerald-400 to-emerald-500 text-ink font-black rounded-xl py-3 text-sm active:scale-95 transition hidden">➕ יצירת אימון מהנבחרים</button>
     </section>
+
+    </div>
+    </details>
 
     <!-- Today's workouts -->
     <section id="workoutSection" class="mb-5 hidden">
@@ -1272,6 +1286,9 @@
   </div>
 </div>
 
+<script src="gym-core.js?v=1"></script>
+<script src="gym-ui.js?v=1"></script>
+<script src="gym-views.js?v=1"></script>
 <script>
 (function(){
   'use strict';
@@ -1346,6 +1363,7 @@
     nudge:      'macro_nudge',        // { day, muted } — smart nudges silenced for today (device-local, not synced)
     measures:   'macro_measures',     // [{day, waist, hip, chest, arm, ts}] body circumferences, synced
     eatwin:     'macro_eatwin',       // { target } — eating-window goal in hours, 0 = none. Synced
+    gym:        'macro_gym',          // gym engine (gym-*.js): exercise settings, session meta, activities. Synced
   };
   const EPOCH = '2000-01-01';
 
@@ -4777,6 +4795,7 @@
             paintExNames(); renderWoEx();
           }
         }
+        if($('woTools')) $('woTools').open = true;     // the manual logger is folded under the live mode
         $('woMinutes').scrollIntoView({ behavior:'smooth', block:'center' });
         showToast('הפרטים מולאו מהתוכנית — אפשר לשנות ולרשום ✓');
       };
@@ -4819,6 +4838,39 @@
     // Keep the adaptive program in the loop (it owns calorie adjustments).
     if(program) logProgramWeight(v); else renderAll();
     return true;
+  }
+  // Toast after a weigh-in: says whether the diary targets moved with the plan.
+  function weightLoggedMsg(){
+    if(!program || !program.macros) return 'המשקל נרשם ✓';
+    const t = curTarget(), m = program.macros;
+    return (t.p === Number(m.p) && t.c === Number(m.c) && t.f === Number(m.f))
+      ? 'המשקל נרשם ✓ היעדים ממשיכים לפי התוכנית'
+      : 'המשקל נרשם ✓ היעדים שקבעת לא השתנו (סנכרון לתוכנית בלשונית התוכנית)';
+  }
+  // Quick weigh-in on the diary screen, so weight isn't hidden inside the plan tab.
+  function renderTodayWeightCard(){
+    const box = $('todayWeightCard'); if(!box) return;
+    const last = weightLog.length ? weightLog[weightLog.length-1] : null;
+    const today = last && last.day === todayKey();
+    box.innerHTML =
+      '<div class="flex items-center justify-between mb-2">' +
+        '<span class="text-[11px] font-black text-gray-100">⚖️ משקל</span>' +
+        '<span class="text-[10px] font-bold ' + (today?'txt-sky':'text-gray-500') + '">' +
+          (last ? (today ? 'היום: ' : 'אחרון: ') + last.kg + ' ק״ג' : 'עוד לא נרשם משקל') + '</span>' +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<input id="twInput" type="number" inputmode="decimal" step="0.1" placeholder="משקל היום (ק״ג)" class="input-dark flex-1 min-w-0 border border-line rounded-xl px-3 py-2 text-sm text-center font-bold text-gray-100 placeholder-gray-600 outline-none">' +
+        '<button id="twSaveBtn" class="btn-neon text-white font-black rounded-xl px-4 text-sm active:scale-95 transition whitespace-nowrap">רישום</button>' +
+      '</div>';
+    const btn = $('twSaveBtn'), inp = $('twInput');
+    const submit = ()=>{
+      const v = parseFloat(inp.value);
+      if(!(v>0)){ showToast('יש להזין משקל תקין בק״ג'); inp.focus(); return; }
+      if(!logWeight(v)){ showToast('המשקל צריך להיות בין 20 ל-400 ק״ג'); return; }
+      showToast(weightLoggedMsg());
+    };
+    btn.onclick = submit;
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
   }
   function weightStats(){
     if(!weightLog.length) return null;
@@ -4916,7 +4968,7 @@
         const v = parseFloat(inp.value);
         if(!(v>0)){ showToast('יש להזין משקל תקין בק״ג'); inp.focus(); return; }
         inp.value = '';
-        if(logWeight(v)) showToast('המשקל נרשם ✓' + (program ? ' התוכנית עודכנה' : ''));
+        if(logWeight(v)) showToast(weightLoggedMsg());
         renderWeightSection();
       };
       btn.onclick = submit;
@@ -5305,6 +5357,7 @@
   // form and the day's log — hiding those would leave a screen you cannot log into.
   const CARD_TOGGLES = [
     { id:'rankStrip',        label:'🏆 רמה ורצף',        hint:'הפס העליון עם ה-XP והרצף. ההישגים נשארים זמינים מהתפריט.', also:['deskLvl'] },
+    { id:'todayWeightCard',  label:'⚖️ רישום משקל',      hint:'שדה רישום משקל מהיר במסך היומי' },
     { id:'smartNudge',       label:'✨ תזכורת חכמה',      hint:'שורה אחת שמגיבה למצב היום — חלבון שנשאר, מים שפיגרו, אימון שלא נרשם' },
     { id:'alerts',           label:'⚠️ התראות מאקרו',     hint:'שורות "קרוב ליעד" ו"חריגה"' },
     { id:'suggestCard',      label:'💡 מה עכשיו?',        hint:'הצעות לפי מה שנשאר להיום' },
@@ -6259,11 +6312,18 @@
     const ex=program.weights.find(x=>x.day===day);
     if(ex) ex.kg=kg; else program.weights.push({ day, kg });
     program.weights.sort((a,b)=> a.day<b.day?-1:1);
+    // Only carry the plan's macros into the diary when the diary is already following the
+    // plan. Logging weight used to stamp the plan's macros over targets the user had set by
+    // hand — every weigh-in silently erased them. Custom targets stay; the plan's new
+    // numbers are one tap away on "סנכרן את היעדים לתוכנית".
+    const t = curTarget(), m = program.macros;
+    const followsPlan = !!m && t.p === Number(m.p) && t.c === Number(m.c) && t.f === Number(m.f);
     adaptProgram();
     program.updatedAt=day;
     saveProgram();
-    applyProgramTargets();
+    if(followsPlan) applyProgramTargets();
     renderPlan(); renderAll();
+    return followsPlan;
   }
   function syncProfileFromProgram(p){
     try{
@@ -6397,7 +6457,7 @@
     // adaptive brain then rewrote the macro targets to 1598/50/599.
     if(!logWeight(kg)){ showToast('המשקל צריך להיות בין 20 ל-400 ק״ג'); return; }
     $('planWeightInput').value='';
-    showToast('המשקל נרשם והתוכנית עודכנה ✓');
+    showToast(weightLoggedMsg());
   };
   $('planSyncBtn').onclick = ()=>{ syncTargetsToProgram(); };
   $('kcalModeRow').onclick = ()=>{ kcalMode = !kcalMode; saveKcalPrefs(); paintKcalMode(); renderAll();
@@ -7659,6 +7719,7 @@
     }
     // program: only when there's none locally (an existing plan is never replaced)
     if(d[LS.program] && !program){ program = d[LS.program]; save(LS.program, program); added.program = true; }
+    try{ if(d[LS.gym] && window.Gym && Gym.merge(d[LS.gym])) pushUserState('gym'); }catch(_){}
     // Body profile — drives workout burn and the water target. Restored only when the
     // device has none, so a restore can never overwrite a profile already set up here.
     const inProf = d[LS.profile];
@@ -7860,6 +7921,7 @@
       row(th('ממוצע כוסות ביום שנרשם') + num(s.waterAvg)) +
       row(th('ימים עם רישום שתייה') + num(s.waterDays)) +
       '</table></section>';
+    try{ if(window.Gym && Gym.reportHTMLBlock){ const g = Gym.reportHTMLBlock(s.from, s.to); if(g) h += '<section><h2>אימוני כוח ופעילות</h2>' + g + '</section>'; } }catch(_){}
     if(forPrint) h += '<p class="rep-note">הנתונים בדוח זה דווחו על ידי המשתמש/ת באפליקציה ומבוססים על הערכה עצמית של כמויות. ' +
       'ימים ללא רישום אינם נכללים בממוצעים. אין בדוח זה משום ייעוץ או אבחון רפואי.</p>';
     return h;
@@ -7898,6 +7960,7 @@
     L.push('אימונים: ' + s.workouts + ' · ' + s.woMin + ' דק׳ · ' + s.woKcal + ' קל׳' + (s.volume ? ' · נפח ' + fmt(s.volume) + ' ק״ג' : ''));
     if(s.winDays) L.push('חלון אכילה: ' + durTxt(s.winAvgMins) + ' בממוצע ב-' + s.winDays + ' ימים' + (s.winTarget ? ' (יעד ' + s.winTarget + ' שעות)' : ''));
     if(s.waterDays) L.push('שתייה: ' + s.waterAvg + ' כוסות בממוצע ב-' + s.waterDays + ' ימים');
+    try{ if(window.Gym && Gym.reportLines) Gym.reportLines(s.from, s.to).forEach(l=> L.push(l)); }catch(_){}
     L.push('');
     L.push('הנתונים דווחו עצמית באפליקציית Munch & Move ומבוססים על הערכת כמויות.');
     return L.join('\n');
@@ -8476,7 +8539,7 @@
   // Each card renders independently: one throwing function used to abort the whole
   // chain and leave every card below it blank, which looked like total data loss.
   function renderAll(){
-    [renderDateLabel, renderKcalCard, renderWaterCard, renderRings, renderSmartNudge, renderAlerts,
+    [renderDateLabel, renderKcalCard, renderWaterCard, renderTodayWeightCard, renderGymHome, renderRings, renderSmartNudge, renderAlerts,
      renderSuggestions, renderEnergyBalance, renderEatWindow, renderFavs, renderMealTemplates,
      renderTodayPlanCard, renderWorkouts, renderLog, renderPlan, renderGamification,
      renderAnalytics, renderWeekSummary, renderTrends, renderWeightSection, renderMeasureSection,
@@ -8515,7 +8578,7 @@
   // categories and the display prefs. Each is one JSONB blob per key, merged
   // ADDITIVELY with what's already here — the same rule as a backup restore, so a
   // second device can never wipe what the first one has.
-  const STATE_KEYS = ['water','weights','meals','favcats','kcalmode','watermode','shop','cards','measures','eatwin'];
+  const STATE_KEYS = ['water','weights','meals','favcats','kcalmode','watermode','shop','cards','measures','eatwin','gym'];
   // Bookkeeping so a DELETE can propagate. A purely additive merge resurrects anything
   // the user removed and reverts any downward correction, so each key remembers the
   // cloud version it last saw (`seen`) and whether it changed here since (`dirty`):
@@ -8565,7 +8628,8 @@
     } else if(name==='shop' && Array.isArray(v)){
       shopList = v.filter(x=> x && x.id && x.name); save(LS.shop, shopList);
       try{ renderShop(); }catch(_){}
-    } else if(name==='kcalmode'){ applyKcalPrefs(v); }
+    } else if(name==='gym'){ if(window.Gym) Gym.adopt(v); }
+    else if(name==='kcalmode'){ applyKcalPrefs(v); }
     else if(name==='watermode'){ applyWaterMode(v); }
   }
   // Prefs must land in memory too, not only in storage, or they take effect only
@@ -8593,6 +8657,7 @@
   }
   function mergeStateValue(name, cloudVal){
     if(cloudVal == null) return false;
+    if(name === 'gym') return !!(window.Gym && Gym.merge(cloudVal));
     let changed = false;
     if(name === 'water' && typeof cloudVal === 'object' && !Array.isArray(cloudVal)){
       Object.entries(cloudVal).forEach(([day, cups])=>{
@@ -8702,6 +8767,7 @@
     if(name==='watermode') return load(LS.watermode, null);
     if(name==='shop')      return shopList;
     if(name==='cards')     return cardVis;
+    if(name==='gym')       return window.Gym ? Gym.stateValue() : null;
     return null;
   }
   function stateRow(k){
@@ -8895,6 +8961,8 @@
       // REPLACE a local workout and drop them. Carry the local `exercises` across.
       const localById = new Map();
       Object.keys(allWorkouts).forEach(day=>{ (allWorkouts[day]||[]).forEach(it=>{ if(it && it.id) localById.set(it.id, it); }); });
+      // Edits made here that never reached the server (still queued) win over the cloud.
+      const updWk = new Map(outbox.filter(o=> o.op==='upd' && o.t==='workouts').map(o=> [o.id, o.payload || {}]));
       wk.data.forEach(r=>{
         if(delWk.has(r.id)) return;                      // deleted here, not yet on the server
         if(ids.has(r.id)) return;
@@ -8903,7 +8971,21 @@
         if(Array.isArray(r.exercises) && r.exercises.length) item.exercises = r.exercises;
         if(r.kcal_net != null) item.kcalNet = num(r.kcal_net);
         const loc = localById.get(r.id);
-        if(loc && Array.isArray(loc.exercises) && loc.exercises.length){
+        const pend = updWk.get(r.id);
+        if(pend){
+          ['type','level','minutes','kcal','note'].forEach(k=>{ if(pend[k] !== undefined) item[k] = pend[k]; });
+          if(pend.kcal_net !== undefined && pend.kcal_net !== null) item.kcalNet = num(pend.kcal_net);
+          if(loc && Array.isArray(loc.exercises)) item.exercises = loc.exercises;
+        } else if(loc && loc.exPending && Array.isArray(loc.exercises)){
+          // Edited here while the sets couldn't be uploaded: this copy is the newer one.
+          item.exercises = loc.exercises; item.exPending = true;
+          if(sb && user && cloudCaps.woExtra)
+            cloudCatch(sb.from('workouts').update({ exercises: loc.exercises.length ? loc.exercises : null }).eq('id', r.id)
+              .then(res=>{ if(!(res && res.error)){ delete item.exPending; save(LS.workouts, allWorkouts); } return res; }));
+        } else if(Array.isArray(r.exercises) && r.exercises.length){
+          // The cloud holds sets for this workout: it is the shared copy, so an edit made on
+          // another device shows up here instead of being masked by this device's old copy.
+        } else if(loc && Array.isArray(loc.exercises) && loc.exercises.length){
           item.exercises = loc.exercises;
           // The sets/reps only ever lived on this device (logged before the column
           // existed, or while offline). Send them up so the other device sees them too.
@@ -8963,7 +9045,8 @@
       // so leaving it behind hands the new account the previous owner's body.
       [LS.logs, LS.favs, LS.favcats, LS.workouts, LS.program, LS.targethist, LS.targets,
        LS.water, LS.weights, LS.measures, LS.meals, LS.gam, LS.chats, LS.profile, LS.shop, LS.cards,
-       LS.kcalmode, LS.watermode, LS.eatwin, LS.outbox, LS.statemeta, LS.photos, LS.nudge].forEach(k=>{ try{ localStorage.removeItem(k); }catch(_){} });
+       LS.kcalmode, LS.watermode, LS.eatwin, LS.outbox, LS.statemeta, LS.photos, LS.nudge, LS.gym, 'macro_gym_live'].forEach(k=>{ try{ localStorage.removeItem(k); }catch(_){} });
+      try{ if(window.Gym && Gym.reload) Gym.reload(); }catch(_){}
       allLogs = {}; favs = []; allWorkouts = {}; targetHist = null; program = null;
       waterLog = {}; weightLog = []; measureLog = []; mealTpls = []; favMeta = { list:[], map:{} }; shopList = []; cardVis = {};
       stateMeta = {}; outbox = []; photoLog = {}; nudgeState = {};
@@ -8983,10 +9066,15 @@
     renderAll();
     try{ await detectCloudCaps(); }
     catch(e){ console.warn('detectCloudCaps', e); }
-    try{ await Promise.race([ cloudLoadAll(), new Promise(r=> setTimeout(r, 20000)) ]); }
-    catch(e){ console.warn('cloudLoadAll', e); }
-    try{ await Promise.race([ syncUserState(), new Promise(r=> setTimeout(r, 15000)) ]); }
-    catch(e){ console.warn('syncUserState', e); }
+    let syncedOk = true;
+    try{ if(await Promise.race([ cloudLoadAll().then(()=> 'ok'), new Promise(r=> setTimeout(()=> r('timeout'), 20000)) ]) !== 'ok') syncedOk = false; }
+    catch(e){ syncedOk = false; console.warn('cloudLoadAll', e); }
+    try{ if(await Promise.race([ syncUserState().then(()=> 'ok'), new Promise(r=> setTimeout(()=> r('timeout'), 15000)) ]) !== 'ok') syncedOk = false; }
+    catch(e){ syncedOk = false; console.warn('syncUserState', e); }
+    // The gym history import is per account, so it runs once the account and its
+    // cloud copy are known — and only after a sync that finished, or a second device
+    // that timed out would import again.
+    try{ if(syncedOk && (stateMeta.gym || {}).seen && window.Gym && Gym.maybeSeed) Gym.maybeSeed(); }catch(e){ console.warn('gym seed', e); }
     renderAll();
     // Only after the cloud has had its say: starting earlier would show the tour to
     // someone whose history is about to arrive from another device.
@@ -9178,6 +9266,7 @@
         currentWeight: program.weights?.[program.weights.length-1]?.kg
       };
     }
+    try{ if(window.Gym && Gym.chatContext) ctx.gym = Gym.chatContext(); }catch(_){}
     return ctx;
   }
 
@@ -9364,6 +9453,7 @@
 
   // ----- agentic actions: the assistant PROPOSES, the user confirms, we execute -----
   function agentExecute(action){
+    if(window.Gym && Gym.handles && Gym.handles(action.name)) return Gym.agentExecute(action);
     const day = todayKey();
     const a = action.args || {};
     // The assistant always logs to TODAY. If the user is viewing another day,
@@ -9500,6 +9590,7 @@
     return 'לא הצלחתי לבצע את הפעולה הזו. אפשר לרשום ידנית במסך הראשי.';
   }
   function proposalDetails(action){
+    if(window.Gym && Gym.handles && Gym.handles(action.name)) return Gym.agentCard(action);
     const a = action.args || {};
     // The card must show the QUANTITY it is about to log — without it the user can't
     // tell whether "2 כפיות" was understood, which read as "it ignores amounts".
@@ -9593,7 +9684,7 @@
     const row=document.createElement('div'); row.className='flex gap-2';
     const yes=document.createElement('button');
     yes.className='flex-1 bg-gradient-to-l from-emerald-400 to-emerald-500 text-ink font-black rounded-lg py-2 text-[12px] active:scale-95 transition';
-    yes.textContent='כן, הוסף ✓';
+    yes.textContent = d.confirm || 'כן, להוסיף ✓';
     const no=document.createElement('button');
     no.className='px-3 glass rounded-lg py-2 text-[12px] font-bold text-gray-300 active:scale-95 transition';
     no.textContent='לא';
@@ -9848,8 +9939,67 @@
     finally{ $('remAddBtn').disabled=false; }
   };
 
+  // ---------- Gym engine bridge (gym-core.js / gym-ui.js / gym-views.js) ----------
+  // The gym files only touch the app through this object, so the storage, cloud sync
+  // and undo rules stay in one place.
+  function cUpdateWorkout(w){
+    const payload = { type:w.type, level:w.level, minutes:w.minutes, kcal:w.kcal, note:w.note||'' };
+    // Sets that couldn't go up with this update (sets column not confirmed yet) are
+    // flagged, so the next load keeps this device's copy instead of the cloud's old one.
+    if(cloudCaps.woExtra){ payload.exercises = (w.exercises && w.exercises.length) ? w.exercises : null; payload.kcal_net = w.kcalNet ?? null; }
+    else if(Array.isArray(w.exercises)){ w.exPending = true; save(LS.workouts, allWorkouts); }
+    outboxAdd({ op:'upd', t:'workouts', id:w.id, payload });
+    if(!sb||!user) return;
+    const p = sb.from('workouts').update(payload).eq('id', w.id);
+    cloudRun(payload.exercises !== undefined ? p.then(r=>{ if(!(r && r.error) && w.exPending){ delete w.exPending; save(LS.workouts, allWorkouts); } return r; }) : p, 'workouts', w.id);
+  }
+  function renderGymHome(){ if(window.Gym && Gym.renderHome){ Gym.invalidate(); Gym.renderHome(); } }
+  function initGym(){
+    if(!window.Gym || !Gym.init) return;
+    try{
+      Gym.init({
+        workouts: ()=> allWorkouts,
+        addWorkout: (w, day, silent)=>{ (allWorkouts[day] = allWorkouts[day] || []).push(w); save(LS.workouts, allWorkouts); cInsertWorkout(w, day); if(!silent) renderAll(); },
+        updateWorkout: (w, day, silent)=>{ save(LS.workouts, allWorkouts); cUpdateWorkout(w); if(!silent) renderAll(); },
+        // A new id for the moved copy: deleting and re-inserting the same id races in the cloud.
+        moveWorkout: (w, from, to)=>{
+          const list = allWorkouts[from] || []; const i = list.indexOf(w); if(i >= 0) list.splice(i, 1);
+          cDeleteWorkout(w.id);
+          const nw = Object.assign({}, w, { id:uid() }); delete nw.synced;
+          (allWorkouts[to] = allWorkouts[to] || []).push(nw); save(LS.workouts, allWorkouts); cInsertWorkout(nw, to);
+          if(Gym.rekey) Gym.rekey(w.id, nw.id, to);
+          renderAll();
+        },
+        deleteWorkout: (id, day, silent)=>{
+          const list = allWorkouts[day] || []; const i = list.findIndex(x=> x.id === id); if(i < 0) return;
+          const item = list.splice(i, 1)[0]; save(LS.workouts, allWorkouts); cDeleteWorkout(id);
+          if(!silent){ renderAll(); showToast('אימון נמחק', ()=>{ (allWorkouts[day] = allWorkouts[day] || []).push(item); save(LS.workouts, allWorkouts); cInsertWorkout(item, day); renderAll(); }); }
+        },
+        todayKey, shiftKey, dateFromKey, renderAll, showToast, uid,
+        pushState: k=> pushUserState(k),
+        estKcal: estWorkoutKcal, estKcalNet: estWorkoutKcalNet,
+        userEmail: ()=> (user && user.email) || '',
+        printHTML: html=>{
+          if(typeof window.print !== 'function'){ showToast('הדפדפן הזה לא תומך בהדפסה — אפשר להעתיק כטקסט'); return; }
+          $('printArea').innerHTML = html;
+          document.documentElement.classList.add('printing');
+          requestAnimationFrame(()=> requestAnimationFrame(()=>{
+            try{ window.print(); } catch(e){ showToast('לא הצלחתי לפתוח את חלון ההדפסה'); }
+            finally{ endPrint(); }
+          }));
+        },
+        downloadFile: (n, t, m)=>{ showToast(downloadFile(n, t, m) ? 'הקובץ ירד ✓' : 'ההורדה נכשלה'); },
+        copyText: txt=>{
+          if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(()=> showToast('הועתק ✓')).catch(()=> showToast('לא הצלחתי להעתיק'));
+          else showToast('ההעתקה לא נתמכת בדפדפן הזה');
+        },
+      });
+    }catch(e){ console.warn('gym init', e); }
+  }
+
   async function boot(){
     initWeightLog();          // absorb any weights already stored inside the program
+    initGym();
     renderSlotPicker();       // meal tag defaults to the current time of day
     // A PWA left open past midnight kept `viewKey` on yesterday while todayKey() moved,
     // so new food was written into the previous day. Roll forward when we come back.

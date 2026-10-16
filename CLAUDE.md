@@ -9,6 +9,8 @@ https://foodapp-macro.vercel.app
 - `tailwind.css` — **מקומפל מראש**, לא CDN. אחרי הוספת מחלקות חדשות חובה לבנות מחדש דרך `tasks/tailwind-build/`
 - `sw.js` — Service Worker. שינוי ב-CSS או בנכסי ה-shell מחייב העלאת מספר ה-CACHE
 - `vendor/zxing.min.js` — מפענח ברקודים (decoder-only, אין בו `decodeFromCanvas`)
+- `gym-core.js` / `gym-ui.js` / `gym-views.js` (16.10.2026) — מצב "אימון חי" בטאב האימונים: מאגר תרגילים, התקדמות כפולה, רוטציה, היסטוריה, עריכה, דוח למאמנת, וכלי העוזר `gym_edit`/`log_activity`/`feature_request`. נוגעים באפליקציה רק דרך `initGym()` ב-`index.html`. המצב ב-`macro_gym` (מסונכרן כ-user_state `gym`). ייבוא ההיסטוריה האישית רץ רק לחשבון של יובל.
+  **כל שינוי בקבצים האלה מחייב להעלות את `?v=` בתגיות הסקריפט ב-`index.html` ובשורות ה-SHELL ב-`sw.js`, ולהעלות את CACHE** — הקבצים מוגשים מהמטמון קודם.
 - Supabase (`suifyxxjvritdqthbivm`) — שינויים בסכמה **תמיד אדיטיביים בלבד**
 
 ## פקודות בנייה / הרצה

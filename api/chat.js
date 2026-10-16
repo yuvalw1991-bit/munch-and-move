@@ -155,6 +155,60 @@ const TOOLS = [{
         required: ['type', 'minutes', 'calories'],
       },
     },
+    {
+      name: 'gym_edit',
+      description: 'שינוי בכל מה שקשור לאימוני הכוח: תיקון/הוספה/מחיקה של ביצוע תרגיל בכל יום (גם ימים קודמים), שינוי משקל עבודה, טווח חזרות, מדרגות משקל במכשיר, הוצאה/החזרה/השהיה של תרגיל מהרוטציה, הוספת מכשיר חדש למאגר, שינוי סדר במסלול במכון, שינוי תבניות A/B, העדפות (משך אימון, יעדים שבועיים, יום מנוחה, יום מאמנת), והחלפה/דילוג באימון חי פתוח. אפשר כמה שינויים בבת אחת.',
+      parameters: {
+        type: 'object',
+        properties: {
+          changes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                action: { type: 'string', enum: ['edit_entry','delete_entry','delete_workout','set_working_weight','set_rep_range','set_weight_steps','set_active','pause','add_exercise','move_in_route','set_template','set_preference','set_note','live_swap','live_skip'] },
+                exercise: { type: 'string', description: 'מזהה התרגיל מהמאגר (למשל leg_press) או שמו' },
+                day: { type: 'string', description: 'YYYY-MM-DD. ברירת מחדל: היום' },
+                sets: { type: 'array', description: 'לעריכת ביצוע: סט לכל סדרה', items: { type: 'object', properties: { kg: { type: 'number' }, reps: { type: 'number' }, seconds: { type: 'number' }, rpe: { type: 'number', description: 'קושי 1–10' } } } },
+                kg: { type: 'number' }, reps: { type: 'number' }, seconds: { type: 'number' }, rpe: { type: 'number' },
+                lo: { type: 'number' }, hi: { type: 'number' },
+                values: { type: 'array', items: { type: 'number' }, description: 'מדרגות משקל' },
+                active: { type: 'boolean' }, until: { type: 'string' }, days: { type: 'number' },
+                after: { type: 'string', description: 'התרגיל שאחריו במסלול' },
+                name: { type: 'string' }, en: { type: 'string' },
+                area: { type: 'string', enum: ['legs','glutes','back','chest','shoulders','core','arms'] },
+                kind: { type: 'string', enum: ['reps','time'] }, per_side: { type: 'boolean' },
+                template: { type: 'string', enum: ['A','B'] }, exercises: { type: 'array', items: { type: 'string' } },
+                key: { type: 'string', enum: ['minutes','max','strengthTarget','pilatesTarget','restDay','trainerDay'] }, value: { type: 'number', description: 'ימים: 0=ראשון … 6=שבת' },
+                text: { type: 'string' },
+              },
+              required: ['action'],
+            },
+          },
+        },
+        required: ['changes'],
+      },
+    },
+    {
+      name: 'log_activity',
+      description: 'רישום פעילות שאינה אימון כוח: פילאטיס מכשירים, סלסה, זומבה, הליכה או אחר — עם פרטי השיעור והתחושה. להשתמש בזה במקום log_workout לפעילויות האלה.',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['pilates','salsa','zumba','walk','other'] },
+          minutes: { type: 'number' }, day: { type: 'string', description: 'YYYY-MM-DD, ברירת מחדל היום' },
+          instructor: { type: 'string' }, class_type: { type: 'string' },
+          difficulty: { type: 'number', description: '1–10' }, enjoyment: { type: 'number', description: '1–10' },
+          would_repeat: { type: 'boolean' },
+        },
+        required: ['kind'],
+      },
+    },
+    {
+      name: 'feature_request',
+      description: 'שמירת בקשה לשינוי באפליקציה עצמה (מסך חדש, כפתור, עיצוב, התנהגות) שאי אפשר לבצע מהצ׳אט. הבקשה נשמרת ברשימת "בקשות לשינוי".',
+      parameters: { type: 'object', properties: { text: { type: 'string', description: 'תיאור הבקשה במילים של המשתמש/ת' } }, required: ['text'] },
+    },
   ],
 }];
 
@@ -185,7 +239,12 @@ const BASE_PROMPT =
   'אין לך אפשרות לרשום ליום אחר מהיום, ואינך יכול/ה לגעת ברישומים מימים קודמים. ' +
   'לעולם אל תגיד/י "תיקנתי" או "מחקתי" בלי שקראת לכלי המתאים — זו הטעיה. ' +
   'כשמדובר על אוכל/אימון מיום אחר ("אתמול אכלתי", "בשבת התאמנתי") — אל תקרא/י לכלי; הסבר/י שהרישום מכאן נכנס להיום, ושכדי לרשום ליום אחר צריך לעבור לאותו יום בחצים שליד התאריך במסך הראשי. ' +
-  'אין צורך לבקש אישור בטקסט — פשוט קרא/י לכלי, והאפליקציה תציג למשתמש/ת אישור לפני ההוספה בפועל. אפשר להוסיף גם משפט קצר וידידותי לצד קריאת הכלי.';
+  'אין צורך לבקש אישור בטקסט — פשוט קרא/י לכלי, והאפליקציה תציג למשתמש/ת אישור לפני ההוספה בפועל. אפשר להוסיף גם משפט קצר וידידותי לצד קריאת הכלי. ' +
+  'אימוני כוח ומכון (חריג לכלל הימים): לכל תיקון, מחיקה או הוספה של ביצוע תרגיל — גם בימים קודמים, עם day בפורמט YYYY-MM-DD — ולכל שינוי במשקל עבודה, טווח חזרות, מדרגות משקל, רוטציה, מכשיר חדש, סדר המסלול, תבניות A/B או העדפות האימון: קרא/י ל-gym_edit עם מזהי התרגילים מההקשר. אפשר כמה שינויים בקריאה אחת. ' +
+  'עקרונות האימון באפליקציה: מעט תרגילים איכותיים (7–9), Full Body ברוטציה, התקדמות כפולה (קודם חזרות עד קצה הטווח בקושי 6–7, ואז מדרגת משקל וחזרה לתחתית הטווח), קושי 1–10 בלבד (בלי RIR), ולא מודדים הצלחה בקלוריות. מכשיר חדש נכנס לרוטציה ולא מאריך את האימון. ' +
+  'פילאטיס, סלסה, זומבה והליכה → log_activity ולא log_workout. ' +
+  'בקשה לשנות את האפליקציה עצמה (מסך, כפתור, עיצוב, פיצ׳ר חדש) — אינך יכול/ה לשנות קוד: קרא/י ל-feature_request ואמור/אמרי שהבקשה נשמרה ותיבנה בנפרד. ' +
+  'כאב חד, נפיחות, חולשה, נימול או סחרחורת — המלץ/י לעצור ולפנות לגורם רפואי, ואל תבנה/י סביב זה אימון.';
 
 function contextBlock(ctx) {
   if (!ctx) return '';
@@ -276,6 +335,9 @@ function contextBlock(ctx) {
       (p.currentWeight != null ? 'משקל נוכחי: ' + p.currentWeight + ' ק״ג.' : '') +
       '\nהתאם/י את העצה לתוכנית הזו — עזור/י למשתמש/ת לעמוד ביעד הקלורי, ' +
       'בכמות החלבון, ובמספר האימונים השבועי.';
+  }
+  if (typeof ctx.gym === 'string' && ctx.gym) {
+    s += '\n\nנתוני אימוני הכוח (לשימוש עם gym_edit):\n' + ctx.gym.slice(0, 7000);
   }
   return s;
 }
