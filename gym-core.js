@@ -88,6 +88,8 @@
   G.touchPrefs = ()=>{ S.prefsAt = Date.now(); };
   G.touchTemplates = ()=>{ S.templatesAt = Date.now(); };
   G.state = ()=> S;
+  // Counts coach reports that left the app (print / copy / share / CSV) — feeds an achievement.
+  G.markReport = ()=>{ S.reports = (+S.reports||0) + 1; saveState(); if(B && B.renderAll) B.renderAll(); };
   G.save = saveState;
   // Cloud sync hooks (called by the main app's user_state machinery).
   G.stateValue = ()=> S;
@@ -105,6 +107,7 @@
     const rq = new Set(S.requests.map(x=>x.id));
     c.requests.forEach(x=>{ if(x && x.id && !rq.has(x.id)){ S.requests.push(x); ch = true; } });
     if((+c.seeded||0) > (+S.seeded||0)){ S.seeded = c.seeded; ch = true; }
+    if((+c.reports||0) > (+S.reports||0)){ S.reports = +c.reports; ch = true; }   // a counter: the higher one wins
     // Prefs and templates are whole values: the newer edit wins. A device that never
     // touched them (at = 0) always takes the other copy, so a fresh login can't push
     // defaults over the real settings.

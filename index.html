@@ -1286,10 +1286,10 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=7"></script>
-<script src="gym-ui.js?v=7"></script>
-<script src="gym-views.js?v=7"></script>
-<script src="celebrate.js?v=1"></script>
+<script src="gym-core.js?v=9"></script>
+<script src="gym-ui.js?v=9"></script>
+<script src="gym-views.js?v=9"></script>
+<script src="celebrate.js?v=3"></script>
 <script>
 (function(){
   'use strict';
@@ -3467,6 +3467,7 @@
   // Esc closes the topmost open modal / loader (keyboard accessibility + quick exit).
   document.addEventListener('keydown', (e)=>{
     if(e.key !== 'Escape') return;
+    if(window.Celebrate && Celebrate.isOpen && Celebrate.isOpen()) return;   // celebrate.js closes its own screen
     if(tourActive){ endTour(); return; }
     if(!$('aiOverlay').classList.contains('hidden')){ forceHideOverlay(); return; }
     const modals = ['reportModal','measureModal','shopModal','labelModal','favCatModal','achModal','shareModal','historyModal','introModal','mealModal','editModal','targetModal','chatPanel'];
@@ -6651,7 +6652,7 @@
   const BADGE_CATS = [
     ['track','📗 מעקב ורצף'], ['nutri','🥗 תזונה'], ['workout','🤸 אימונים'], ['live','🏋️ אימון חי'],
     ['prog','📈 התקדמות ושיאים'], ['power','🧱 כוח וסיבולת'], ['variety','🗺️ מגוון'], ['week','🎯 יעד שבועי'],
-    ['coach','👩‍🏫 אימון עם מאמן/ת'], ['studio','🌀 פילאטיס וריקוד'], ['weight','⚖️ משקל'], ['water','💧 מים'],
+    ['coach','👩‍🏫 אימון אישי'], ['studio','🌀 פילאטיס וריקוד'], ['weight','⚖️ משקל'], ['water','💧 מים'],
     ['measure','📏 היקפים'], ['eatwin','🕐 חלון אכילה'], ['app','✨ האפליקציה'], ['level','🏆 רמות ו-XP'],
   ];
   const BD = (id, icon, title, desc, key, n, tier, cat)=> ({ id, icon, title, desc, key, n, tier, cat, test:s=> (+s[key]||0) >= n });
@@ -6696,8 +6697,8 @@
     BD('balanced100', '💫','100 מאוזנים',   '100 ימים מאוזנים (סה״כ)',   'balancedDays',100,'l','nutri'),
     BD('balancedWeek','👑','שבוע מאוזן',    '7 ימים מאוזנים ברצף',       'balancedRun',7,  'g','nutri'),
     BD('balancedFort','🎯','שבועיים מאוזנים','14 ימים מאוזנים ברצף',     'balancedRun',14, 'l','nutri'),
-    BD('protein7',  '🥩','מלך החלבון',  '7 ימים ביעד החלבון',   'proteinDays',7,  's','nutri'),
-    BD('protein30', '🍖','אלוף החלבון', '30 ימים ביעד החלבון',  'proteinDays',30, 'g','nutri'),
+    BD('protein7',  '🥩','שבוע של חלבון',  '7 ימים ביעד החלבון',   'proteinDays',7,  's','nutri'),
+    BD('protein30', '🍖','חודש של חלבון', '30 ימים ביעד החלבון',  'proteinDays',30, 'g','nutri'),
     BD('carb7',     '🍞','איזון פחמימה','7 ימים ביעד הפחמימות', 'carbDays',7,     's','nutri'),
     BD('fat7',      '🥑','שומן חכם',    '7 ימים ביעד השומן',    'fatDays',7,      's','nutri'),
     // — אימון חי —
@@ -6740,12 +6741,12 @@
     BD('pilGoal1',  '🌀','יעד פילאטיס',      'עמידה ביעד הפילאטיס השבועי',        'pilatesWeeks',1,  's','week'),
     BD('listen',    '🤍','הקשבת לגוף',       'אימון מותאם ביום של כאבי שרירים',   'listened',1,      's','week'),
     // — אימון עם מאמן/ת —
-    BD('coach1',   '👩‍🏫','אימון עם מאמן/ת', 'אימון ראשון עם מאמן/ת',            'trainerCount',1, 'b','coach'),
-    BD('coach5',   '🤝','5 אימונים אישיים','5 אימונים עם מאמן/ת',              'trainerCount',5, 's','coach'),
-    BD('coach10',  '🏅','10 אימונים אישיים','10 אימונים עם מאמן/ת',            'trainerCount',10,'g','coach'),
+    BD('coach1',   '👩‍🏫','אימון אישי ראשון', 'אימון ראשון עם מאמן או מאמנת',            'trainerCount',1, 'b','coach'),
+    BD('coach5',   '🤝','5 אימונים אישיים','5 אימונים עם מאמן או מאמנת',              'trainerCount',5, 's','coach'),
+    BD('coach10',  '🏅','10 אימונים אישיים','10 אימונים עם מאמן או מאמנת',            'trainerCount',10,'g','coach'),
     BD('smart1',   '🧠','פירוק חכם',       'אימון ראשון שנכנס מהדבקה, קובץ או צילום', 'smartCount',1, 'b','coach'),
     BD('newEx10',  '🆕','10 תרגילים חדשים','10 תרגילים חדשים נוספו למעקב',     'customCount',10,'s','coach'),
-    BD('report1',  '📋','דוח ראשון',       'דוח אימונים ראשון למאמן/ת',         'reports',1,      'b','coach'),
+    BD('report1',  '📋','דוח ראשון',       'דוח האימונים הראשון יצא מהאפליקציה',         'reports',1,      'b','coach'),
     // — פילאטיס וריקוד —
     BD('pil1',   '🌀','פילאטיס ראשון',  'אימון פילאטיס ראשון', 'pilatesCount',1, 'b','studio'),
     BD('pil10',  '🧘','10 פילאטיס',     '10 אימוני פילאטיס',   'pilatesCount',10,'s','studio'),
@@ -6831,10 +6832,12 @@
   // eating window and the rest of the app. Each block is guarded on its own, so one
   // missing piece (the gym files not loaded, a store not ready yet) can't take the
   // whole achievements system down with it.
+  let gymStatsCache = null;
   function extraStats(){
     const x = {};
     const G = window.Gym;
     const days = Object.keys(allWorkouts||{});
+    const d0 = days.length;
     try{
       const S = G && G.state ? G.state() : null;
       const acts = (S && S.activities) || {}, sess = (S && S.sessions) || {};
@@ -6856,7 +6859,7 @@
           if(meta.verdicts){                                   // saved by the live-workout flow
             liveCount++;
             const left = (meta.skipped||[]).length + (meta.cut||[]).length + (meta.deferred||[]).length;
-            if(!left) liveFull++;
+            if(!left && +meta.planned > 0 && +meta.doneN >= +meta.planned) liveFull++;   // ended early ≠ the whole plan
             if((+meta.durationMin||0) >= 45) liveLong++;
             if((+meta.soreness||0) >= 4) listened++;
           }
@@ -6877,6 +6880,12 @@
     }catch(_){}
     try{
       if(G && G.history && G.evaluate && G.entryStats){
+        // A cheap fingerprint of every logged set: same fingerprint, same answer, so the
+        // per-exercise walk (the slow part) runs only when the workouts really changed.
+        let fp=0, fn=0;
+        for(const d of days) for(const w of (allWorkouts[d]||[])) for(const e of ((w&&w.exercises)||[])){ fn++; fp=(fp*31 + String(e.exId||e.name||'').length) % 1e9; for(const st of ((e&&e.sets)||[])) fp=(fp*31 + (+st.kg||0)*7 + (+st.reps||0)*13 + (+st.sec||0) + (+st.rpe||0)*3 + 1) % 1e9; }
+        const H = d0 + '|' + fn + '|' + fp + '|' + ((G.state && (G.state().custom||[]).length) || 0);
+        if(gymStatsCache && gymStatsCache.h === H){ Object.assign(x, gymStatsCache.v); throw 0; }
         const h = G.history().slice().reverse();            // oldest first
         const byEx = {}, perWo = {}, exSet = new Set(), areas = new Set();
         let ups=0, prCount=0, doubled=0, plankSec=0, volTotal=0;
@@ -6901,6 +6910,7 @@
         Object.assign(x, { ups, prCount, prEx: prEx.size, doubled, plankSec, volTotal: Math.round(volTotal),
           volBest: Math.round(Math.max(0, ...wos.map(w=> w.vol))), upsBestDay: Math.max(0, ...wos.map(w=> w.ups)),
           exCount: exSet.size, areaCount: areas.size });
+        gymStatsCache = { h:H, v:{ ups:x.ups, prCount:x.prCount, prEx:x.prEx, doubled:x.doubled, plankSec:x.plankSec, volTotal:x.volTotal, volBest:x.volBest, upsBestDay:x.upsBestDay, exCount:x.exCount, areaCount:x.areaCount } };
       }
     }catch(_){}
     try{
@@ -6979,6 +6989,9 @@
     return stats;
   }
   let gamReady=false, lastGam=null;
+  // True while a login pulls the account from the cloud: what arrives then was earned
+  // before, so it is absorbed quietly instead of popping a big "N new badges" screen.
+  let gamQuiet=false;
   // --- celebration effects (pure DOM/CSS, no libraries) ---
   // On desktop (lg) #rankStrip is hidden — anchor celebrations to the visible
   // sidebar level card instead, otherwise they'd fire from the screen corner.
@@ -7053,6 +7066,17 @@
     // snapshot's list of definitions) and already earned get one summary screen, even on
     // boot, instead of either silence or thirty screens in a row.
     const prev=load(LS.gam, null);
+    // Earned is earned: a badge stays even when its number later drops (a target turned
+    // off, a favorite deleted, a cache cleared), so it is never lost and never re-celebrated.
+    if(prev && Array.isArray(prev.badges)){
+      // One-time repair: an unreviewed build (16.10, ~1h live) could grant "כל התוכנית" for a
+      // live workout that was ended early. Drop it once unless it is really earned now.
+      if(!prev.fix1) prev.badges=prev.badges.filter(id=> id!=='liveFull' || g.badges.includes(id));
+      const ids=new Set(BADGES.map(b=>b.id)), now=new Set(g.badges);
+      prev.badges.forEach(id=>{ if(ids.has(id)) now.add(id); });
+      g.badges=BADGES.map(b=>b.id).filter(id=> now.has(id));
+    }
+    lastGam=g;
     const items=[];
     if(prev){
       const known=new Set(Array.isArray(prev.defs) ? prev.defs : BADGES_V1);
@@ -7062,7 +7086,7 @@
       if(catchUp.length) items.push({ icon:'🎁', tier:topTier(catchUp), label:'הישגים חדשים באפליקציה',
         title: catchUp.length===1 ? 'כבר השגת הישג חדש' : 'כבר השגת '+catchUp.length+' מההישגים החדשים',
         desc:'נוספו לאפליקציה הישגים חדשים, ועל מה שכבר עשית מגיע לך קרדיט עכשיו.', icons:catchUp.map(b=>b.icon), cheer:'מכאן נחגוג כל הישג ברגע שהוא קורה 🎉' });
-      if(gamReady){
+      if(gamReady && !gamQuiet){
         if(g.xp > (prev.xp||0)) floatXP(g.xp - (prev.xp||0));           // "+N XP" floats up
         if(g.level > (prev.level||1)){                                  // level up
           const lb=$('lvlBadge'); if(lb){ lb.classList.add('level-pop'); setTimeout(()=>lb.classList.remove('level-pop'),650); }
@@ -7077,7 +7101,7 @@
       }
     }
     if(items.length) setTimeout(()=> celebrateItems(items), 350);   // let the sheet that triggered it close first
-    save(LS.gam, { xp:g.xp, level:g.level, streak:g.streak, badges:g.badges, defs:BADGES.map(b=>b.id) });
+    save(LS.gam, { xp:g.xp, level:g.level, streak:g.streak, badges:g.badges, defs:BADGES.map(b=>b.id), fix1:1 });
     gamReady=true;
   }
   const TIER_RANK={ b:1, s:2, g:3, l:4 };
@@ -9330,6 +9354,7 @@
   async function afterLogin(){
     hideAuth();
     guardAccountSwitch();
+    gamQuiet=true; setTimeout(()=>{ gamQuiet=false; }, 60000);   // never stays quiet if a step below throws
     // Draw the local view FIRST. Everything below talks to the network, and a stalled
     // request used to leave an empty dashboard with no error and no way back.
     renderAll();
@@ -9345,6 +9370,7 @@
     // that timed out would import again.
     try{ if(syncedOk && (stateMeta.gym || {}).seen && window.Gym && Gym.maybeSeed) Gym.maybeSeed(); }catch(e){ console.warn('gym seed', e); }
     renderAll();
+    gamQuiet=false;
     // Only after the cloud has had its say: starting earlier would show the tour to
     // someone whose history is about to arrive from another device.
     maybeStartTour();

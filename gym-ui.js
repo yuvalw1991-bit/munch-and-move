@@ -582,7 +582,8 @@
       deferred: L.items.filter(it=> it.status === 'busy' || it.status === 'deferred').map(it=> it.exId),
       cut: L.items.filter(it=> it.status === 'cut').map(it=> it.exId),
       skipped: L.items.filter(it=> it.status === 'skip').map(it=> it.exId),
-      verdicts: Object.fromEntries(done.map(it=> [it.exId, it.verdict && it.verdict.kind])), at: Date.now() };
+      verdicts: Object.fromEntries(done.map(it=> [it.exId, it.verdict && it.verdict.kind])),
+      planned: L.items.length, doneN: done.length, at: Date.now() };
     G.save();
     b.addWorkout(w, today);
     L.phase = 'saved'; persist(); render();
