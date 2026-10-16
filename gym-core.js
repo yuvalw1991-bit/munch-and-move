@@ -31,7 +31,7 @@
     { id:'kickback',      he:'קיקבק במכונה',        en:'Kickback',       area:'glutes',    slot:'post',      route:7,   kind:'reps', lo:10, hi:15, steps:STACK, rest:60, icon:'🍑' },
     { id:'row',           he:'חתירה',               en:'Row',            area:'back',      slot:'back',      route:8,   kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'🚣' },
     { id:'selector_row',  he:'חתירה בסלקטור',       en:'Selector Row',   area:'back',      slot:'back',      route:8.1, kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'🚣' },
-    { id:'machine_pull',  he:'משיכה במכונה',        en:'Machine Pull',   area:'back',      slot:'back',      route:8.15,kind:'reps', lo:10, hi:15, steps:STACK, rest:90, active:false, note:'מכונה נפרדת — לא להשוות משקלים לחתירה אחרת', icon:'🚣' },
+    { id:'machine_pull',  he:'משיכה במכונת סלקטור', en:'Selector Pull',   area:'back',      slot:'back',      route:8.15,kind:'reps', lo:10, hi:15, steps:STACK, rest:90, active:false, note:'מכונה נפרדת — לא להשוות משקלים לחתירה אחרת', icon:'🚣' },
     { id:'lat_pulldown',  he:'פולי עליון',          en:'Lat Pulldown',   area:'back',      slot:'back',      route:8.2, kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'⬇️' },
     { id:'chest_press',   he:'לחיצת חזה',           en:'Chest Press',    area:'chest',     slot:'chest',     route:8.3, kind:'reps', lo:10, hi:12, steps:UPPER, rest:90, big:true, icon:'💪' },
     { id:'pec_fly',       he:'פרפר',                en:'Pec Fly',        area:'chest',     slot:'chest',     route:8.4, kind:'reps', lo:10, hi:15, steps:UPPER, rest:75, icon:'🦋' },
@@ -205,6 +205,8 @@
   G.entryStats = entryStats;
   const r1 = n=> Math.round(n*10)/10;
   const r2 = n=> Math.round(n*100)/100;
+  const ltr = s=> '\u2066' + s + '\u2069';      // keeps "2×10–12" from flipping in RTL
+  G.ltr = ltr;
   const fmtKg = n=> (n===0 ? 'משקל גוף' : (r2(n) + ' ק״ג'));
   const fmtSec = s=>{ s = Math.round(+s||0); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
   function setsLine(entry, e){
@@ -214,7 +216,7 @@
     if(st.mixed) return sets.map(s=> (s.kg? r2(s.kg) : 0) + '×' + (s.reps||'?')).join(', ') + ' ק״ג';
     const reps = sets.map(s=> +s.reps||0);
     const same = reps.every(r=> r === reps[0]);
-    return fmtKg(st.top) + ' · ' + (same ? sets.length + '×' + (reps[0]||'?') : reps.join('/')) + (e && e.perSide ? ' לכל צד' : '');
+    return fmtKg(st.top) + ' · ' + ltr(same ? sets.length + '×' + (reps[0]||'?') : reps.join('/')) + (e && e.perSide ? ' לכל צד' : '');
   }
   G.fmtKg = fmtKg; G.fmtSec = fmtSec; G.setsLine = setsLine; G.r1 = r1;
   const rpeTxt = r=> (r==null ? '' : 'קושי ' + r1(r));
@@ -268,9 +270,9 @@
   G.recommend = recommend;
   G.recLine = function(rec, e){
     if(!rec) return '';
-    if(rec.kind === 'time') return fmtSec(rec.sec) + ' × ' + rec.sets + ' · יעד ' + rec.lo + '–' + rec.hi + ' שנ׳';
+    if(rec.kind === 'time') return ltr(fmtSec(rec.sec) + ' × ' + rec.sets) + ' · יעד ' + ltr(rec.lo + '–' + rec.hi) + ' שנ׳';
     const rng = rec.lo === rec.hi ? rec.lo : rec.lo + '–' + rec.hi;
-    return fmtKg(rec.kg) + ' · ' + rec.sets + '×' + rng + (e && e.perSide ? ' לכל צד' : '');
+    return fmtKg(rec.kg) + ' · ' + ltr(rec.sets + '×' + rng) + (e && e.perSide ? ' לכל צד' : '');
   };
   G.readiness = function(id){
     const rec = recommend(id); if(!rec || !rec.last) return null;
@@ -328,95 +330,139 @@
     return out.sort((a,b)=> a.day < b.day ? -1 : a.day > b.day ? 1 : (a.at||0) - (b.at||0));
   }
   G.selfSessions = selfSessions;
-  function nextLabel(){
-    const ss = selfSessions();
-    if(ss.length){ const l = ss[ss.length-1].label; return l === 'A' ? 'B' : l === 'B' ? 'C' : 'A'; }
-    // First time: start from whichever template was done less recently.
-    const h = history();
-    const age = t=> (S.templates[t]||[]).reduce((a,id)=> a + Math.min(30, daysSince(lastDoneDay(id, h))), 0);
-    return age('A') >= age('B') ? 'A' : 'B';
-  }
+  // Session title: "Full Body" or the chosen focus.
+  const FOCUS = {
+    full:     { label:'Full Body',        areas:null },
+    legs:     { label:'מיקוד רגליים',     areas:['legs'] },
+    glutes:   { label:'מיקוד ישבן',       areas:['glutes'] },
+    lower:    { label:'פלג גוף תחתון',    areas:['legs','glutes'] },
+    upper:    { label:'פלג גוף עליון',    areas:['back','chest','shoulders','arms'] },
+    back:     { label:'מיקוד גב',         areas:['back'] },
+    chest:    { label:'מיקוד חזה',        areas:['chest'] },
+    shoulders:{ label:'מיקוד כתפיים',     areas:['shoulders'] },
+    arms:     { label:'מיקוד ידיים',      areas:['arms','chest','shoulders'] },
+    core:     { label:'מיקוד ליבה',       areas:['core'] },
+  };
+  G.FOCUS = FOCUS;
+  function nextLabel(){ return 'Full Body'; }
   G.nextLabel = nextLabel;
-  // Pick the best exercise for a slot: least recently done, least done lately.
-  function bestForSlot(slot, used, h){
-    const cands = libAll().filter(e=> e.active && e.slot === slot && !used.has(e.id) && !isPaused(e));
-    if(!cands.length) return null;
-    cands.sort((a,b)=> score(b, h) - score(a, h));
-    return cands[0].id;
-  }
   function score(e, h){ return Math.min(30, daysSince(lastDoneDay(e.id, h))) - 3*recentCount(e.id, h, 10) + (e.big ? 1 : 0); }
   function isPaused(e){ return !!(e.pausedUntil && B && e.pausedUntil > B.todayKey()); }
   G.isPaused = isPaused;
 
-  // Build today's session. opts: { soreness, areas:{area:0-10}, minutes, label }
+  // Build a session from the WHOLE library.
+  //   Full Body: every body area gets an equal share of the exercises (round-robin by
+  //   area; inside an area, what waited longest goes first).
+  //   Focus: ~70% of the exercises come from the focus areas, the rest stays balanced.
+  //   include: exercises that must be in today's session.
+  // Length follows the chosen minutes: up to 9 exercises, then a third set on the big
+  // lifts, and only then more exercises — quality before quantity.
+  // opts: { soreness, areas:{area:0-10}, minutes, focus, include:[ids] }
   function planSession(opts){
     opts = opts || {};
     const h = history();
-    const label = opts.label || nextLabel();
     const lib = libAll();
     const byId = id=> lib.find(e=> e.id === id);
-    let ids;
-    if(label === 'C'){
-      const used = new Set(); ids = [];
-      ['core1','quad','post','hips','back','chest','shoulders'].forEach(sl=>{ const id = bestForSlot(sl, used, h); if(id){ ids.push(id); used.add(id); } });
-      // flexible 8th: second glute/hamstring move or a core move — whichever waited longer
-      const p2 = bestForSlot('post', used, h), c2 = bestForSlot('core2', used, h);
-      const pick = (p2 && c2) ? (score(byId(p2), h) >= score(byId(c2), h) ? p2 : c2) : (p2 || c2);
-      if(pick) ids.push(pick);
-    } else {
-      ids = (S.templates[label] || DEFAULT_TEMPLATES[label] || []).slice();
-    }
-    // inactive / paused → same-slot replacement
-    const used = new Set();
-    ids = ids.map(id=>{
-      const e = byId(id);
-      if(e && e.active && !isPaused(e) && !used.has(id)){ used.add(id); return id; }
-      const rep = e ? bestForSlot(e.slot, used, h) : null;
-      if(rep) used.add(rep);
-      return rep;
-    }).filter(Boolean);
-    // Exercises skipped as "machine busy" last time get priority now — swapped in for
-    // the same slot, never added on top.
-    const prevS = selfSessions().slice(-1)[0];
-    const pend = (prevS && Array.isArray(prevS.deferred)) ? prevS.deferred : [];
-    pend.forEach(pid=>{
-      const pe = byId(pid); if(!pe || !pe.active || used.has(pid) || isPaused(pe)) return;
-      const i = ids.findIndex(id=> (byId(id)||{}).slot === pe.slot);
-      if(i >= 0){ used.delete(ids[i]); ids[i] = pid; used.add(pid); }
+    const focusKey = FOCUS[opts.focus] ? opts.focus : 'full';
+    const focus = FOCUS[focusKey];
+    const pool = lib.filter(e=> e.active && !isPaused(e));
+    const areasAll = Object.keys(AREAS).filter(a=> pool.some(e=> e.area === a));
+    const focusAreas = focus.areas ? focus.areas.filter(a=> areasAll.includes(a)) : null;
+    // weight per area: equal for full body; 70/30 for a focus
+    const weight = {};
+    areasAll.forEach(a=>{
+      if(!focusAreas || !focusAreas.length) weight[a] = 1;
+      else weight[a] = focusAreas.includes(a) ? 0.7 / focusAreas.length : 0.3 / Math.max(1, areasAll.length - focusAreas.length);
     });
-    // Soreness
-    const areas = opts.areas || {};
+    // Soreness: a very sore area drops out unless it's the focus
+    const sAreas = opts.areas || {};
     const sore = +opts.soreness || 0;
-    const items = ids.map(id=>{
-      const e = byId(id);
-      const rec = recommend(id) || {};
-      const aSore = Math.max(+areas[e.area]||0, Object.keys(areas).length ? 0 : sore);
-      const it = { exId:id, sets:2, rec, light:false, note:'' };
-      if(aSore >= 6 && !e.big && e.slot !== 'core1') it.drop = true;
-      else if(aSore >= 4 && rec.kind === 'reps'){
-        it.light = true;
+    const soreOf = a=> Math.max(+sAreas[a] || 0, Object.keys(sAreas).length ? 0 : sore);
+    const dropArea = a=> (+sAreas[a] || 0) >= 6;      // general soreness never empties the plan
+    // Busy last time → first in line in its area
+    const prevS = selfSessions().slice(-1)[0];
+    const pend = new Set((prevS && Array.isArray(prevS.deferred)) ? prevS.deferred : []);
+    // 'הרכב אחר' reshuffles the picks inside each area without breaking the balance.
+    const jit = e=>{ if(!opts.shuffle) return 0; let x = 0; for(const ch of e.id) x = (x*31 + ch.charCodeAt(0)) % 997; return ((x + opts.shuffle*131) % 23) - 11; };
+    const sc = e=> score(e, h) + (pend.has(e.id) ? 25 : 0) + jit(e);
+
+    const mins = Math.max(15, +opts.minutes || S.prefs.minutes || 55);
+    const warm = Math.min(WARM, Math.round(mins * 0.1)), cool = Math.min(COOL, Math.round(mins * 0.07));
+    const budget = Math.max(8, mins - warm - cool - 2);
+    const items = [], used = new Set(), count = {};
+    areasAll.forEach(a=> count[a] = 0);
+    const total = ()=> items.reduce((a,it)=> a + estMin(byId(it.exId), it.sets), 0);
+    const add = id=>{ items.push({ exId:id, sets:2 }); used.add(id); const a = byId(id).area; count[a] = (count[a]||0) + 1; };
+    (opts.include || []).forEach(id=>{ const e = byId(id); if(e && e.active && !isPaused(e) && !used.has(id) && (!items.length || total() + estMin(e, 2) <= budget)) add(id); });
+    // Area that rested longest goes first on a tie, so the "extra" slots rotate between
+    // areas from one workout to the next instead of always landing on the same ones.
+    const areaRest = a=> Math.max(0, ...pool.filter(e=> e.area === a).map(e=> Math.min(30, daysSince(lastDoneDay(e.id, h)))));
+    const isFocus = a=> !!(focusAreas && focusAreas.includes(a));
+    const nextPick = ()=>{
+      const order = areasAll.filter(a=> !dropArea(a) || isFocus(a))
+        .map(a=> ({ a, need: ((count[a]||0) + 1) / weight[a], rest: areaRest(a) }))
+        .sort((x, y)=> x.need - y.need || (isFocus(y.a)?1:0) - (isFocus(x.a)?1:0) || y.rest - x.rest);
+      for(const { a } of order){
+        const cands = pool.filter(e=> e.area === a && !used.has(e.id)).sort((x, y)=> sc(y) - sc(x));
+        if(cands.length) return cands[0].id;
+      }
+      return null;
+    };
+    const fits = id=> total() + estMin(byId(id), 2) <= budget;
+    // A third set: on a focus day the focus exercises first; on a full-body day the area
+    // with the fewest sets so far, big lifts first — so the SETS stay balanced too.
+    const setsOf = a=> items.filter(it=> byId(it.exId).area === a).reduce((s, it)=> s + it.sets, 0);
+    const thirdSets = ()=>{
+      for(let guard = 0; guard < 30; guard++){
+        const cands = items.filter(it=> it.sets < 3 && soreOf(byId(it.exId).area) <= 3 && byId(it.exId).kind !== 'time')
+          .filter(it=> !focusAreas || isFocus(byId(it.exId).area) || !items.some(x=> x.sets < 3 && isFocus(byId(x.exId).area)))
+          .sort((x, y)=> (isFocus(byId(y.exId).area)?1:0) - (isFocus(byId(x.exId).area)?1:0)
+            || setsOf(byId(x.exId).area) - setsOf(byId(y.exId).area)
+            || (byId(y.exId).big?1:0) - (byId(x.exId).big?1:0));
+        const it = cands.find(c=>{ const e = byId(c.exId); return total() - estMin(e, 2) + estMin(e, 3) <= budget; });
+        if(!it) break;
+        it.sets = 3;
+      }
+    };
+    const cap = 9;
+    for(let guard = 0; guard < 40; guard++){
+      if(items.length >= cap) break;
+      const id = nextPick(); if(!id || !fits(id)) break;
+      // On a focus day, once the focus area has no exercises left, its existing
+      // exercises get a third set before the rest of the body gets more.
+      const focusShare = ()=>{ const all = items.reduce((x, it)=> x + it.sets, 0); return all ? items.filter(it=> isFocus(byId(it.exId).area)).reduce((x, it)=> x + it.sets, 0) / all : 1; };
+      if(focusAreas && !isFocus(byId(id).area) && !pool.some(e=> isFocus(e.area) && !used.has(e.id)) && focusShare() < 0.7 && items.some(it=> isFocus(byId(it.exId).area) && it.sets < 3)){
+        const before = total(); thirdSets(); if(total() !== before) continue;
+      }
+      add(id);
+    }
+    thirdSets();
+    for(let guard = 0; guard < 20 && items.length < 14; guard++){
+      const id = nextPick(); if(!id || !fits(id)) break;
+      add(id);
+    }
+    // Targets + soreness adjustments
+    const out = items.map(it=>{
+      const e = byId(it.exId);
+      const rec = recommend(it.exId) || {};
+      const aSore = soreOf(e.area);
+      const r = { exId:it.exId, sets:it.sets, rec, light:false, note:'' };
+      if(aSore >= 4 && rec.kind === 'reps'){
+        r.light = true; r.note = 'אזור תפוס';
         if(rec.action === 'increase'){ rec.kg = (rec.last ? entryStats(rec.last).top : rec.kg); rec.reps = rec.lo; rec.action = 'maintain'; }
-        rec.why = 'אזור תפוס — בלי העלאה היום'; it.note = 'אזור תפוס';
+        rec.why = 'אזור תפוס — בלי העלאה היום';
         if(aSore >= 6){ rec.kg = stepDown(e, rec.kg); rec.why = 'אזור תפוס מאוד — מדרגה למטה, נקי'; }
       }
-      return it;
-    }).filter(it=> !it.drop);
-    // Time budget (strength block only)
-    const budget = Math.max(25, (+opts.minutes || S.prefs.minutes) - WARM - COOL);
-    const total = ()=> items.reduce((a,it)=> a + estMin(byId(it.exId), it.sets), 0);
-    const prio = it=>{ const e = byId(it.exId); return (e.big?3:0) + (EMPHASIS[e.area]?2:0) + (e.slot==='core1'?2:0); };
-    while(total() > budget && items.length > 5){
-      let k = 0; items.forEach((it,i)=>{ if(prio(it) < prio(items[k])) k = i; });
-      items.splice(k, 1);
-    }
-    // One main lift may get a third set when the day is fresh and time allows.
-    if(sore <= 3 && !Object.values(areas).some(v=> +v >= 4)){
-      const main = items.find(it=> byId(it.exId).main);
-      if(main && total() + estMin(byId(main.exId), 3) - estMin(byId(main.exId), 2) <= budget - 2) { main.sets = 3; main.rec.sets = 3; }
-    }
-    items.forEach(it=>{ it.rec.sets = it.sets; });
-    items.sort((a,b)=> byId(a.exId).route - byId(b.exId).route);
-    return { label, items, estMin: Math.round(WARM + COOL + total()) };
+      rec.sets = r.sets;
+      return r;
+    });
+    out.sort((a,b)=> byId(a.exId).route - byId(b.exId).route);
+    const lacking = focus.areas ? focus.areas.filter(a=> !areasAll.includes(a)) : [];
+    let missing = lacking.length ? 'אין במאגר תרגילים פעילים ל' + lacking.map(a=> AREAS[a]).join(' ול') + ' — אפשר להוסיף מכשיר דרך העוזר או במעקב התרגילים' : '';
+    const planned = Math.round(warm + cool + out.reduce((a,it)=> a + estMin(byId(it.exId), it.sets), 0));
+    if(!missing && planned < mins - 12) missing = 'המאגר הפעיל מספיק לכ-' + planned + ' דקות בלי לחזור על תרגילים. אפשר להוסיף מכשירים או להאריך את המנוחות.';
+    const shares = {}; out.forEach(it=>{ const a = byId(it.exId).area; shares[a] = (shares[a]||0) + it.sets; });   // sets per area
+    return { label: focus.label, focus: focusKey, items: out, shares, missing, warm, cool, estMin: planned };
   }
   G.planSession = planSession;
 
@@ -449,7 +495,7 @@
       if(S.prefs.restDay != null && dow === +S.prefs.restDay) continue;
       if(i > 0 && (all[B.shiftKey(k,-1)] || []).some(isStrength) && i === 1) continue;
       if(S.prefs.trainerDay != null && dow === +S.prefs.trainerDay) return { day:k, dow, trainer:true, text: (i===0?'היום':'יום ' + DAYS[dow]) + ' · אימון עם המאמנת' };
-      return { day:k, dow, label: nextLabel(), text: (i===0?'היום':'יום ' + DAYS[dow]) + ' · ⁨Full Body ' + nextLabel() + '⁩' };
+      return { day:k, dow, label: 'Full Body', text: (i===0?'היום':'יום ' + DAYS[dow]) + ' · ⁨Full Body⁩' };
     }
     return null;
   }
@@ -473,7 +519,7 @@
   const t = (sec, rpe)=> ({ kg:0, reps:0, sec, rpe:rpe==null?undefined:rpe });
   const SEED = [
     { day:'2026-09-28', trainer:true, label:'אימון אישי #1', ex:[
-      ['leg_press', s(10,12)], ['leg_curl', s(32,12)], ['row', s(18,12)], ['chest_press', s(9,10)],
+      ['leg_press', s(10,12), 'המכונה הראשונה עם המסילה'], ['leg_curl', s(32,12), 'בישיבה'], ['selector_row', s(18,12)], ['chest_press', s(9,10), 'מנוחה 2 דק׳ בין הסטים'],
       ['bird_dog', s(0,10)], ['plank_bench', [t(63)], 'על קופסה 51 ס״מ'], ['hip_abductor', s(32,15), '+ 5 שניות סטטי'] ]},
     { day:'2026-09-29', ex:[
       ['leg_press', s(10,12,6)], ['hip_abductor', s(36,12,6)], ['hip_adductor', [{kg:36, reps:0, rpe:9}], 'כבד מדי'],
@@ -495,9 +541,9 @@
       ['leg_press', s(20,12,6.5,3)], ['leg_curl', s(36,15,6.5)], ['hip_abductor', s(41,15,6.5)], ['kickback', s(36,10,6.5)],
       ['row', s(27,12,7.5)], ['lat_pulldown', s(36,10,7)], ['pec_fly', s(14,15,6.5)], ['plank_bench', [t(166,6), t(137,6)], 'על ספסל'] ]},
     { day:'2026-10-12', trainer:true, label:'אימון אישי #3', ex:[
-      ['box_squat', s(8,12,7,3), 'קושי בערך 7'], ['hip_thrust', s(5,10,7), 'קושי בערך 7'], ['hip_abductor', s(41,15,7), 'סופרסט עם קירוב'],
+      ['box_squat', s(8,12,7,3), 'לשבת ולקום, על החלק הגבוה · קושי בערך 7'], ['hip_thrust', s(5,10,7), 'קושי בערך 7'], ['hip_abductor', s(41,15,7), 'סופרסט עם קירוב'],
       ['hip_adductor', s(27,12,7), 'סופרסט · קושי בערך 7'], ['selector_row', s(23,12,7,3), 'קושי בערך 7'], ['chest_press', s(9,12,7)],
-      ['shoulder_press', s(14,12,7)], ['bird_dog', s(1.25,10,7)], ['plank_bench', [t(107,7)], 'על פלטפורמה'] ]},
+      ['shoulder_press', s(14,12,7)], ['bird_dog', s(1.25,10,7)], ['plank_bench', [t(107,7)], 'על הבמה בסטודיו'] ]},
     { day:'2026-10-13', ex:[
       ['bird_dog', s(1.25,10,7)], ['box_squat', s(8,12,7.5)], ['plank_bench', [t(153)], 'על ספסל'], ['leg_press', s(20,15,7.5)],
       ['hip_abductor', s(41,12,6.5), 'בוצע בזמן תפיסות'], ['hip_adductor', s(27,12,7.5)], ['kickback', s(36,12,7)],
@@ -514,8 +560,32 @@
   // gyms, weights and weekly routine are not these.
   const OWNER = 'yuvalw1991@gmail.com';
   G.isOwner = ()=> !!B && String(B.userEmail() || '').toLowerCase() === OWNER;
+  // v2 (16.10): the trainer's own notes — 28.9 was the selector row, not the plain row.
+  // Fixes a v1 import in place; never touches anything that wasn't imported.
+  function migrateSeedV2(){
+    const all = B.workouts();
+    const w = (all['2026-09-28'] || []).find(x=> S.sessions[x.id] && S.sessions[x.id].imported);
+    if(w && Array.isArray(w.exercises)){
+      let ch = false;
+      w.exercises.forEach(e=>{
+        if(e.exId === 'row'){ e.exId = 'selector_row'; e.name = exName(ex('selector_row')); ch = true; }
+        if(e.exId === 'leg_press' && !e.note){ e.note = 'המכונה הראשונה עם המסילה'; ch = true; }
+        if(e.exId === 'chest_press' && !e.note){ e.note = 'מנוחה 2 דק׳ בין הסטים'; ch = true; }
+      });
+      if(ch) B.updateWorkout(w, '2026-09-28', true);
+    }
+    Object.keys(all).forEach(day=> (all[day]||[]).forEach(x=>{
+      if(!(S.sessions[x.id] && S.sessions[x.id].imported)) return;
+      let ch = false;
+      (x.exercises||[]).forEach(e=>{ if(e.exId === 'machine_pull' && e.name !== exName(ex('machine_pull'))){ e.name = exName(ex('machine_pull')); ch = true; } });
+      if(ch) B.updateWorkout(x, day, true);
+    }));
+    S.seeded = 2; saveState();
+  }
   function seedHistory(){
-    if((+S.seeded||0) >= 1 || !B) return 0;
+    if(!B) return 0;
+    if(+S.seeded === 1){ if(G.isOwner()) migrateSeedV2(); return 0; }
+    if((+S.seeded||0) >= 1) return 0;
     if(!G.isOwner()) return 0;
     if(!(+S.prefsAt > 0)){ S.prefs.restDay = 5; S.prefs.trainerDay = 1; S.prefsAt = Date.now(); }
     const all = B.workouts();
@@ -544,11 +614,12 @@
       S.sessions[w.id] = Object.assign(S.sessions[w.id] || {}, { day:sd.day, trainer:!!sd.trainer, title: sd.trainer ? sd.label : 'Full Body', imported:true });
       added += exs.length;
     });
-    S.seeded = 1;
+    S.seeded = 2;
     saveState();
     return added;
   }
   G.seedHistory = seedHistory;
+  G.seedNow = ()=> seedHistory();
 
   // ---------- Init ----------
   G.init = function(bridge){

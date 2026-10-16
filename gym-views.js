@@ -35,7 +35,7 @@
     const m = S().sessions[w.id] || {}, a = S().activities[w.id];
     if(a) return ACT_LABEL[a.kind] || 'פעילות';
     if(m.trainer) return '👩‍🏫 ' + (m.title || 'אימון עם המאמנת');
-    if(m.label) return '⁨Full Body ' + m.label + '⁩';
+    if(m.label) return '⁨' + (/^[ABC]$/.test(m.label) ? 'Full Body ' + m.label : m.label) + '⁩';
     return (w.note || 'אימון').split(' · ')[0];
   }
   function exLine(e){
@@ -506,7 +506,7 @@
         lines.push(x.id + ' | ' + x.he + ' (' + (x.en||'') + ') | ' + (G.AREAS[x.area]||x.area) + ' | ' + (x.active ? (G.isPaused(x) ? 'מושהה עד ' + x.pausedUntil : 'פעיל') : 'לא פעיל') +
           ' | ' + (h ? h.day + ': ' + G.setsLine(h, x) + (G.entryStats(h).rpe!=null ? ' @' + G.entryStats(h).rpe : '') : '—') + ' | ' + (rec ? G.recLine(rec, x) : '—'));
       });
-      lines.push('תבניות: A=' + (S().templates.A||[]).join(',') + ' · B=' + (S().templates.B||[]).join(',') + ' · C=אוטומטי לפי רוטציה. הבאה בתור: ' + G.nextLabel() + '.');
+      lines.push('בניית אימון: האפליקציה מרכיבה כל אימון עצמאי מכל המאגר, בחלוקה שווה בין אזורי הגוף, או עם מיקוד באזור (כ-70% מהתרגילים). אין תבניות קבועות. אורך האימון נבחר בכל פעם.');
       lines.push('העדפות: ' + JSON.stringify(S().prefs));
       const all = b.workouts();
       const ds = Object.keys(all).filter(d=> (all[d]||[]).some(relevant)).sort().reverse().slice(0, 8);
@@ -607,12 +607,13 @@
       }
       case 'move_in_route': { need(); const after = G.ex(idOf(c.after)); if(!after) throw new Error('לא מצאתי את התרגיל שאחריו'); G.setLib(id, { route: after.route + 0.05 }); return 'המסלול עודכן'; }
       case 'set_template': {
-        const t = String(c.template||'').toUpperCase(); if(!['A','B'].includes(t)) throw new Error('אפשר לשנות רק את A או B');
+        throw new Error('אין יותר תבניות קבועות — כל אימון נבנה אוטומטית מכל המאגר. אפשר להשהות תרגיל או לבחור מיקוד');
+        const t = String(c.template||'').toUpperCase();
         const ids = (c.exercises||[]).map(idOf).filter(Boolean); if(ids.length < 4) throw new Error('תבנית צריכה לפחות 4 תרגילים');
         S().templates[t] = ids; G.touchTemplates(); G.save(); return 'תבנית ' + t + ' עודכנה';
       }
       case 'set_preference': {
-        const allowed = { minutes:[30,90], max:[30,120], strengthTarget:[1,7], pilatesTarget:[0,7], restDay:[0,6], trainerDay:[0,6] };
+        const allowed = { minutes:[15,240], max:[15,240], strengthTarget:[1,7], pilatesTarget:[0,7], restDay:[0,6], trainerDay:[0,6] };
         const r = allowed[c.key]; if(!r) throw new Error('הגדרה לא מוכרת');
         const v = c.value === null || c.value === 'none' ? null : Math.round(+c.value);
         if(v != null && !(v >= r[0] && v <= r[1])) throw new Error('ערך לא תקין');

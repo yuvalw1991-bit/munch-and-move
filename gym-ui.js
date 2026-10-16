@@ -37,15 +37,18 @@
   .gy-rpe button.hot.on{background:linear-gradient(90deg,#ffc24b,#ff8b5c)}
   .gy-rpe button.red.on{background:linear-gradient(90deg,#ff5d73,#ff8b5c)}
   #gymLive{position:fixed;inset:0;z-index:70;background:#07080d;overflow-y:auto;-webkit-overflow-scrolling:touch;direction:rtl}
-  #gymLive .gy-wrap{max-width:520px;margin:0 auto;padding:12px 14px 120px}
-  .gy-top{position:sticky;top:0;z-index:2;background:rgba(7,8,13,.92);backdrop-filter:blur(8px);padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+  #gymLive .gy-wrap{max-width:520px;margin:0 auto;padding:12px 14px calc(120px + env(safe-area-inset-bottom))}
+  .gy-top{position:sticky;top:0;z-index:2;background:rgba(7,8,13,.92);backdrop-filter:blur(8px);padding:calc(10px + env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid rgba(255,255,255,.06)}
+  #gymLive .gy-wrap{padding-top:calc(12px + env(safe-area-inset-top))}
+  #gymLive .gy-top + .gy-wrap{padding-top:12px}
+  .gy-sheet{padding-top:calc(16px + env(safe-area-inset-top)) !important}
   .gy-bar{height:6px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}
   .gy-bar>i{display:block;height:100%;background:linear-gradient(90deg,#00ffa3,#27d3ff)}
   .gy-fb{border-radius:16px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.55}
   .gy-fb.up{background:rgba(0,255,163,.08);border:1px solid rgba(0,255,163,.35)}
   .gy-fb.same{background:rgba(39,211,255,.06);border:1px solid rgba(39,211,255,.3)}
   .gy-fb.down,.gy-fb.new{background:rgba(255,194,75,.07);border:1px solid rgba(255,194,75,.35)}
-  .gy-rest{position:fixed;left:12px;right:12px;bottom:16px;z-index:75;max-width:496px;margin:0 auto;border-radius:18px;padding:12px 16px;background:#11131f;border:1px solid rgba(39,211,255,.5);box-shadow:0 10px 40px rgba(0,0,0,.6)}
+  .gy-rest{position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:75;max-width:496px;margin:0 auto;border-radius:18px;padding:12px 16px;background:#11131f;border:1px solid rgba(39,211,255,.5);box-shadow:0 10px 40px rgba(0,0,0,.6)}
   .gy-row{display:flex;align-items:center;gap:8px}
   .gy-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .gy-list li{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
@@ -89,7 +92,7 @@
       h += '<button id="gyResume" class="gy-btn gy-warn w-full" style="height:64px;font-size:17px;width:100%">↩ חזרה לאימון הפתוח · ' + clock(Date.now() - L.startedAt) + '</button>';
     } else {
       h += '<button id="gyStart" class="gy-btn gy-pri" style="height:72px;font-size:21px;width:100%">🏋️ התחלת אימון</button>';
-      h += '<div class="text-center mt-2 text-[12px] font-bold gy-mut">האימון הבא: <bdi>Full Body ' + prev.label + '</bdi> · ~' + prev.estMin + ' דק׳' + (nx && nx.trainer ? ' · ' + esc(nx.text) : '') + '</div>';
+      h += '<div class="text-center mt-2 text-[12px] font-bold gy-mut">האימון הבא: <bdi>' + esc(prev.label) + '</bdi> · ~' + prev.estMin + ' דק׳' + (nx && nx.trainer ? ' · ' + esc(nx.text) : '') + '</div>';
     }
     const acts = Object.values(G.state().activities || {});
     const showPil = G.isOwner() || acts.some(a=> a && a.kind === 'pilates');
@@ -112,12 +115,14 @@
       '<button id="gyHistBtn" class="gy-btn" style="height:46px;font-size:13px">📅 היסטוריה</button>' +
       '<button id="gyTrackBtn" class="gy-btn" style="height:46px;font-size:13px">📈 מעקב תרגילים</button>' +
       '<button id="gyCoachBtn" class="gy-btn" style="height:46px;font-size:13px">📋 ' + (G.isOwner() ? 'דוח למאמנת' : 'דוח למאמן/ת') + '</button></div>';
+    if(G.isOwner() && +G.state().seeded < 1) h += '<button id="gySeed" class="gy-btn gy-warn mt-3" style="height:44px;width:100%;font-size:13px">📥 טעינת ההיסטוריה שלי (28.9–15.10)</button>';
     const reqs = (G.state().requests || []).filter(r=> !r.done);
     if(reqs.length) h += '<div class="text-[11px] gy-mut mt-3">📝 ' + reqs.length + ' בקשות לשינוי באפליקציה נשמרו מהעוזר</div>';
     h += '</section>';
     box.innerHTML = h;
     const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
     on('gyStart', ()=> G.startLive());
+    on('gySeed', ()=>{ const n = G.seedNow ? G.seedNow() : 0; B().showToast(n ? 'נטענו ' + n + ' ביצועים מההיסטוריה ✓' : 'ההיסטוריה כבר נטענה'); B().renderAll(); });
     on('gyResume', ()=> G.openLive());
     on('gyActBtn', ()=> G.openActivity && G.openActivity());
     on('gyHistBtn', ()=> G.openHistory && G.openHistory());
@@ -172,7 +177,7 @@
   G.live = ()=> L || G.liveLoad();
 
   const elapsed = ()=> Date.now() - L.startedAt;
-  const limitMin = ()=> Math.min(+G.state().prefs.max || 60, Math.max(+L.minutes || 55, 30) + 5);
+  const limitMin = ()=> Math.max(15, Math.round(+L.minutes || 55)) + 5;
   const todo = ()=> L.items.map((it,i)=> ({ it, i })).filter(x=> x.it.status === 'todo');
   const remainEst = ()=> todo().reduce((a,{it})=> a + G.estMin(G.ex(it.exId), it.sets), 0);
   function tick(){
@@ -239,16 +244,29 @@
     }
     h += '</div>';
     h += '<div class="gy-card mb-4"><div class="font-black text-gray-100 mb-2">כמה זמן יש?</div><div class="flex gap-2">' +
-      [45,55,60].map(m=> '<button class="gy-btn gy-chip' + (+L.minutes===m?' on':'') + '" data-min="' + m + '">' + m + ' דק׳</button>').join('') + '</div></div>';
+      [45,60,75,90].map(m=> '<button class="gy-btn gy-chip' + (+L.minutes===m?' on':'') + '" data-min="' + m + '">' + m + ' דק׳</button>').join('') + '</div>' +
+      '<div class="gy-row mt-2"><span class="gy-lbl">או בדיוק:</span><input id="gyMinIn" class="gy-in" style="width:90px;text-align:center" type="number" inputmode="numeric" min="15" max="240" value="' + (+L.minutes||55) + '"><span class="gy-lbl">דקות</span></div></div>';
+    h += '<div class="gy-card mb-4"><div class="font-black text-gray-100 mb-2">על מה האימון?</div><div class="flex flex-wrap gap-2">' +
+      Object.entries(G.FOCUS).map(([k, f])=> '<button class="gy-btn gy-chip' + ((L.focus||'full')===k?' on':'') + '" data-focus="' + k + '">' + (k==='full' ? 'Full Body מאוזן' : f.label.replace(/^מיקוד /,'')) + '</button>').join('') + '</div>' +
+      '<div class="text-[11px] gy-mut mt-2">' + ((L.focus||'full')==='full' ? 'כל אזורי הגוף מקבלים חלק שווה מהתרגילים.' : 'רוב האימון (עד כ-70% מהסטים) לאזור שנבחר, והשאר מאוזן על שאר הגוף. כמה בדיוק תלוי בכמה מכשירים יש במאגר לאזור.') + '</div>' +
+      '<button id="gyIncT" class="gy-btn gy-chip mt-3">' + (L.include && L.include.length ? '✓ ' + L.include.length + ' תרגילים קבועים' : '+ תרגילים שחייבים להיכנס') + '</button>';
+    if(L.incOpen){
+      const lib = G.lib().filter(x=> x.active && !G.isPaused(x));
+      h += '<div class="flex flex-wrap gap-2 mt-2">' + lib.map(x=> '<button class="gy-btn gy-chip' + ((L.include||[]).includes(x.id)?' on':'') + '" data-inc="' + x.id + '">' + esc(x.he) + '</button>').join('') + '</div>';
+    }
+    h += '</div>';
     h += '<button id="gyBuild" class="gy-btn gy-pri" style="height:64px;font-size:19px;width:100%"' + (L.flags.length && !L.careful ? ' disabled' : '') + '>בניית האימון ←</button>';
     return h;
   }
   // --- plan summary (focus mode: details hidden behind "הצג תוכנית")
   function renderPlan(){
     const n = L.items.length;
-    let h = '<div class="text-center mt-4"><div class="gy-lbl">האימון של היום</div><div class="gy-big mt-1" dir="ltr">Full Body ' + L.label + '</div>' +
+    let h = '<div class="text-center mt-4"><div class="gy-lbl">האימון של היום</div><div class="gy-big mt-1"><bdi>' + esc(L.label) + '</bdi></div>' +
       '<div class="gy-mut font-bold mt-2">' + n + ' תרגילים · ~' + L.estMin + ' דק׳ כולל חימום ושחרור</div></div>';
-    h += '<div class="flex gap-2 justify-center mt-4">' + ['A','B','C'].map(l=> '<button class="gy-btn gy-chip' + (L.label===l?' on':'') + '" data-label="' + l + '">' + l + '</button>').join('') + '</div>';
+    if(L.shares) h += '<div class="text-center text-[12px] gy-mut mt-2">' + (()=>{ const tot = Object.values(L.shares).reduce((x,y)=> x+y, 0) || 1; return 'סטים לפי אזור: ' + Object.entries(L.shares).map(([a, n])=> (G.AREAS[a]||a) + ' ' + Math.round(n/tot*100) + '%').join(' · '); })() + '</div>';
+    if(L.missing) h += '<div class="gy-card gy-warn mt-3" style="padding:10px;font-size:12px">' + esc(L.missing) + '</div>';
+    h += '<div class="flex flex-wrap gap-2 justify-center mt-4">' + Object.entries(G.FOCUS).map(([k, f])=> '<button class="gy-btn gy-chip' + ((L.focus||'full')===k?' on':'') + '" data-focus="' + k + '">' + (k==='full' ? 'Full Body' : f.label.replace(/^מיקוד /,'')) + '</button>').join('') + '</div>';
+    h += '<button id="gyRebuild" class="gy-btn gy-chip mt-3" style="margin-inline:auto;display:flex">🔀 הרכב אחר</button>';
     if(L.planNote) h += '<div class="text-[12px] text-center gy-mut mt-3">' + esc(L.planNote) + '</div>';
     h += '<button id="gyShowPlan" class="gy-btn gy-chip mt-4" style="margin-inline:auto;display:flex">הצג תוכנית</button>';
     h += '<button id="gyGoWarm" class="gy-btn gy-pri mt-6" style="height:68px;font-size:20px;width:100%">▶ לחימום</button>';
@@ -257,7 +275,7 @@
   }
   function renderWarm(){
     return '<div class="gy-card mt-3 text-center"><div style="font-size:42px">🚶</div><div class="gy-mid mt-1">חימום · הליכון</div>' +
-      '<div class="gy-mut font-bold mt-2">5–7 דקות · 5–5.5 קמ״ש · שיפוע 3 · קושי 5–6</div>' +
+      '<div class="gy-mut font-bold mt-2">⁦5–7⁩ דקות · ⁦5–5.5⁩ קמ״ש · שיפוע 3 · קושי ⁦5–6⁩</div>' +
       '<div class="gy-big mt-5" data-tick="warm">' + mmss(Date.now() - (L.warmAt||Date.now())) + '</div></div>' +
       '<button id="gyWarmDone" class="gy-btn gy-pri mt-5" style="height:68px;font-size:20px;width:100%">✓ סיימתי חימום</button>';
   }
@@ -280,7 +298,7 @@
       const on = val != null && Math.floor(val) === i;
       h += '<button class="gy-btn' + (on?' on':'') + (i>=9?' red':i>=8?' hot':'') + '" data-rpe="' + i + '">' + (on && val % 1 ? i + '.5' : i) + '</button>';
     }
-    return h + '</div><div class="text-[10px] gy-mut mt-1 text-center">לחיצה שנייה על אותו מספר מוסיפה חצי · 6–7 זה האזור הרצוי</div>';
+    return h + '</div><div class="text-[10px] gy-mut mt-1 text-center">לחיצה שנייה על אותו מספר מוסיפה חצי · ⁦6–7⁩ זה האזור הרצוי</div>';
   }
   function stepper(label, key, val, unit){
     return '<div class="gy-card" style="padding:10px 12px"><div class="gy-lbl text-center">' + label + '</div>' +
@@ -300,7 +318,7 @@
     h += '<div class="text-center mt-1"><div style="font-size:34px">' + (e.icon||'🏋️') + '</div><div class="gy-big" style="font-size:34px">' + esc(e.he) + '</div><div class="gy-mut font-bold">' + esc(e.en||'') + (it.light?' · <span class="txt-amber">יום קל לאזור</span>':'') + '</div></div>';
     h += '<div class="gy-card mt-3" style="padding:12px 14px;font-size:13px;line-height:1.7">' +
       '<div><span class="gy-lbl">בפעם הקודמת: </span>' + prevLine(it) + '</div>' +
-      '<div><span class="gy-lbl">היום: </span><b class="text-gray-100">' + esc(G.recLine(Object.assign({}, rec, { sets: it.sets }), e)) + '</b> · קושי 6–7</div>' +
+      '<div><span class="gy-lbl">היום: </span><b class="text-gray-100">' + esc(G.recLine(Object.assign({}, rec, { sets: it.sets }), e)) + '</b> · קושי ' + G.ltr('6–7') + '</div>' +
       '<div class="text-[11px] gy-mut">' + esc(rec.why || '') + '</div></div>';
     if(e.kind === 'time'){
       const best = d.sets.length ? Math.max(...d.sets.map(s=> s.sec)) : 0;
@@ -349,7 +367,7 @@
   function renderCool(){
     const leftMin = Math.max(0, limitMin() - elapsed()/60000);
     return '<div class="gy-card mt-4 text-center"><div style="font-size:40px">🧘</div><div class="gy-mid mt-1">שחרור</div>' +
-      '<div class="gy-mut font-bold mt-2">' + (leftMin >= 3 ? '3–5 דקות הליכה רגועה' : 'נגמר הזמן — אפשר לדלג על השחרור היום') + '</div></div>' +
+      '<div class="gy-mut font-bold mt-2">' + (leftMin >= 3 ? '⁦3–5⁩ דקות הליכה רגועה' : 'נגמר הזמן — אפשר לדלג על השחרור היום') + '</div></div>' +
       '<button id="gyCoolDone" class="gy-btn gy-pri mt-5" style="height:64px;font-size:19px;width:100%">✓ סיימתי</button>' +
       '<button id="gyCoolSkip" class="gy-btn mt-3" style="height:46px;width:100%">דילוג</button>';
   }
@@ -381,7 +399,7 @@
   }
   function planSheet(){
     const icon = s=> ({ done:'✅', busy:'🚧', deferred:'⏭', cut:'✂️', skip:'⤼', todo:'○' })[s] || '○';
-    return '<div class="gy-modal" id="gyPlanSheet"><div class="gy-sheet"><div class="gy-row mb-2" style="justify-content:space-between"><div class="font-black text-gray-100">התוכנית של היום · <bdi>Full Body ' + L.label + '</bdi></div><button class="gy-btn gy-chip" id="gyPlanClose">סגירה</button></div>' +
+    return '<div class="gy-modal" id="gyPlanSheet"><div class="gy-sheet"><div class="gy-row mb-2" style="justify-content:space-between"><div class="font-black text-gray-100">התוכנית של היום · <bdi>' + esc(L.label) + '</bdi></div><button class="gy-btn gy-chip" id="gyPlanClose">סגירה</button></div>' +
       '<ul class="gy-list">' + L.items.map((it,i)=>{
         const e = G.ex(it.exId);
         return '<li><span>' + icon(it.status) + '</span><span class="flex-1 ' + (i===L.cur?'txt-green font-black':'text-gray-100') + '">' + esc(e.he) + (it.sets===3?' · 3 סטים':'') + '</span><span class="gy-mut text-[11px]">' + esc(G.recLine(Object.assign({}, it.rec, {sets:it.sets}), e)) + '</span>' +
@@ -399,9 +417,9 @@
   }
 
   // ---------- flow ----------
-  function build(label){
-    const plan = G.planSession({ soreness:L.soreness, areas: Object.keys(L.areas).length ? Object.fromEntries(Object.keys(L.areas).map(k=> [k, L.careful ? 10 : L.soreness])) : (L.careful ? {} : {}), minutes:L.minutes, label });
-    L.label = plan.label; L.estMin = plan.estMin;
+  function build(){
+    const plan = G.planSession({ soreness:L.soreness, areas: Object.keys(L.areas).length ? Object.fromEntries(Object.keys(L.areas).map(k=> [k, L.careful ? 10 : L.soreness])) : {}, minutes:L.minutes, focus:L.focus, include:L.include, shuffle:L.shuffle });
+    L.label = plan.label; L.estMin = plan.estMin; L.shares = plan.shares; L.missing = plan.missing;
     L.items = plan.items.map(it=> Object.assign(it, { status:'todo', result:null, verdict:null }));
     L.planNote = (L.soreness >= 4 ? 'התאמה לתפיסות: בלי העלאות משקל באזור התפוס' : '');
   }
@@ -467,12 +485,16 @@
     el.querySelectorAll('[data-area]').forEach(b=> b.onclick = ()=>{ const k = b.dataset.area; if(L.areas[k]) delete L.areas[k]; else L.areas[k] = 1; persist(); render(); });
     el.querySelectorAll('[data-flag]').forEach(b=> b.onclick = ()=>{ const i = +b.dataset.flag; L.flags = L.flags.includes(i) ? L.flags.filter(x=> x!==i) : L.flags.concat(i); L.careful = false; persist(); render(); });
     el.querySelectorAll('[data-min]').forEach(b=> b.onclick = ()=>{ L.minutes = +b.dataset.min; persist(); render(); });
+    const mi = $q('#gyMinIn'); if(mi) mi.onchange = ()=>{ const v = Math.round(+mi.value); if(v >= 15 && v <= 240){ L.minutes = v; persist(); render(); } else B().showToast('אפשר בין 15 ל-240 דקות'); };
+    el.querySelectorAll('[data-focus]').forEach(b=> b.onclick = ()=>{ L.focus = b.dataset.focus; persist(); if(L.phase === 'plan'){ build(); } render(); });
+    on('#gyIncT', ()=>{ L.incOpen = !L.incOpen; render(); });
+    el.querySelectorAll('[data-inc]').forEach(b=> b.onclick = ()=>{ const id = b.dataset.inc; L.include = L.include || []; L.include = L.include.includes(id) ? L.include.filter(x=> x!==id) : L.include.concat(id); persist(); render(); });
     on('#gyCancel', ()=>{ G.liveSave(null); L = null; closeLive(); });
     on('#gyStopToday', ()=>{ G.liveSave(null); L = null; closeLive(); B().showToast('מנוחה זו גם החלטה טובה 💚'); });
     on('#gyCareful', ()=>{ L.careful = true; if(!Object.keys(L.areas).length && L.soreness < 6) L.soreness = 6; persist(); render(); });
-    on('#gyBuild', ()=>{ build(null); L.phase = 'plan'; persist(); render(); });
+    on('#gyBuild', ()=>{ build(); L.phase = 'plan'; persist(); render(); });
     // plan
-    el.querySelectorAll('[data-label]').forEach(b=> b.onclick = ()=>{ build(b.dataset.label); persist(); render(); });
+    on('#gyRebuild', ()=>{ L.shuffle = (L.shuffle||0) + 1; build(); persist(); render(); });
     on('#gyShowPlan', ()=>{ L.showPlan = true; render(); });
     on('#gyPlanT', ()=>{ L.showPlan = true; render(); });
     on('#gyPlanClose', ()=>{ L.showPlan = false; render(); });
@@ -549,7 +571,7 @@
     const level = ov == null ? 'mid' : ov <= 5 ? 'low' : ov <= 7.5 ? 'mid' : 'high';
     const id = b.uid();
     const w = { id, type:'gym', level, minutes, kcal: b.estKcal('gym', level, minutes), kcalNet: b.estKcalNet('gym', level, minutes),
-      note: 'Full Body ' + L.label + ' · ' + done.length + ' תרגילים',
+      note: L.label + ' · ' + done.length + ' תרגילים',
       exercises: done.map(it=> ({ name: G.exName(G.ex(it.exId)), exId: it.exId, sets: it.result.sets })) };
     const S = G.state();
     S.sessions[id] = { day: today, label: L.label, soreness: L.soreness, areas: Object.keys(L.areas), flags: L.flags.map(i=> FLAGS[i]),
