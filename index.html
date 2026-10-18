@@ -69,8 +69,11 @@
   /* The blur sits on a layer behind the bar, not on the bar itself: a blurred parent
      would stop the ☰ dropdown inside it from blurring the cards behind it. */
   #appHeader::before{ content:""; position:absolute; inset:0; z-index:-1; pointer-events:none;
-    background:rgba(6,7,13,.86); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+    background:#07080e; }  /* solid, no blur: on iPhone a blurred pinned layer made the fixed tab bar drift while scrolling */
   @media (min-width:1024px){ #appHeader{ margin:0 -2rem; padding-left:2rem; padding-right:2rem; } }
+  /* iPhone ignores a fixed page background and repaints it while scrolling, which made
+     the fixed tab bar jump. Touch screens get a normal scrolling background. */
+  @media (hover:none){ body{ background-attachment:scroll !important; } }
   html{ scroll-padding-top:calc(env(safe-area-inset-top) + 96px); }
   body {
     -webkit-tap-highlight-color: transparent;
