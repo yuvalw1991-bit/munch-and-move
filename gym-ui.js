@@ -98,8 +98,11 @@
     const chip = (txt, ok)=> '<span class="gy-chip gy-btn' + (ok?' on':'') + '" style="pointer-events:none">' + txt + '</span>';
     let h = '<section class="glass-hl rounded-2xl p-4 mb-5">';
     if(L && L.phase && L.phase !== 'saved'){
-      h += '<button id="gyResume" class="gy-btn gy-warn w-full" style="height:64px;font-size:17px;width:100%">↩ חזרה לאימון הפתוח · ' + clock(Date.now() - L.startedAt) + '</button>';
+      h += '<button id="gyResume" class="gy-btn gy-warn w-full" style="height:64px;font-size:17px;width:100%">↩ חזרה לאימון הפתוח' + (Date.now() - L.startedAt < STALE ? ' · ' + clock(Date.now() - L.startedAt) : '') + '</button>';
     } else {
+      const uf = G.unfinishedSaved();
+      if(uf) h += '<div class="gy-card gy-warn mb-3" style="padding:12px"><div class="font-black text-gray-100">⚠️ האימון של היום לא הושלם</div><div class="text-[12px] gy-mut mt-1">בוצעו ' + uf.doneN + ' תרגילים, ו' + leftTxt(uf.left.length) + ': ' + esc(uf.left.map(x=> G.ex(x).he).join(', ')) + '</div>' +
+        '<div class="gy-grid2 mt-2"><button id="gyContinue" class="gy-btn gy-pri" style="height:48px">▶ המשך האימון</button><button id="gyUfX" class="gy-btn" style="height:48px;font-size:12px">לא היום</button></div></div>';
       h += '<button id="gyStart" class="gy-btn gy-pri" style="height:72px;font-size:21px;width:100%">🏋️ התחלת אימון</button>';
       h += '<div class="text-center mt-2 text-[12px] font-bold gy-mut">האימון הבא: <bdi>' + esc(prev.label) + '</bdi> · ~' + prev.estMin + ' דק׳' + (nx && nx.trainer ? ' · ' + esc(nx.text) : '') + '</div>';
     }
@@ -132,8 +135,10 @@
     box.innerHTML = h;
     const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
     on('gyStart', ()=> G.startLive());
+    on('gyContinue', ()=> G.continueSaved());
+    on('gyUfX', ()=> G.dismissUnfinished());
     on('gySeed', ()=>{ const n = G.seedNow ? G.seedNow() : 0; B().showToast(n ? 'נטענו ' + n + ' ביצועים מההיסטוריה ✓' : 'ההיסטוריה כבר נטענה'); B().renderAll(); });
-    on('gyResume', ()=> G.openLive());
+    on('gyResume', ()=> G.openLive({ resume:true }));
     on('gyActBtn', ()=> G.openActivity && G.openActivity());
     on('gyHistBtn', ()=> G.openHistory && G.openHistory());
     on('gyTrackBtn', ()=> G.openTracking && G.openTracking());
@@ -155,13 +160,14 @@
     persist(); G.openLive();
   };
   const STALE = 6 * 3600 * 1000;
-  G.openLive = function(){
+  G.openLive = function(opts){
     injectCss();
     if(!L) L = G.liveLoad();
     if(!L) return;
-    // Left open for hours (forgot to finish): straight to the summary, saved with an
-    // estimated duration rather than the wall-clock gap.
-    if(Date.now() - L.startedAt > STALE && !['pre','plan','sum','saved'].includes(L.phase)){ L.stale = true; L.phase = 'sum'; L.showPlan = false; persist(); }
+    if(opts && opts.resume && ['sum','cool'].includes(L.phase) && L.items.some(G.pendingItem)){ if(L.stale) rebase(); reopenRest(); persist(); }
+    // Left open for hours: back to where it stopped. The clock is rebased to what was
+    // actually done, so the time limit doesn't cut the rest and the duration stays real.
+    if(Date.now() - L.startedAt > STALE && !['pre','plan','saved'].includes(L.phase)) rebase();
     if(L.phase === 'ex' && L.items[L.cur] && L.items[L.cur].status !== 'todo'){ setTimeout(()=> advance(), 0); }
     let el = document.getElementById('gymLive');
     if(!el){ el = document.createElement('div'); el.id = 'gymLive'; document.body.appendChild(el); }
@@ -170,6 +176,26 @@
     render();
     clearInterval(tickT); tickT = setInterval(tick, 1000);
   };
+  function doneMin(){ return (L.warmMin || 0) + L.items.filter(it=> it.status === 'done').reduce((a,it)=> a + G.estMin(G.ex(it.exId), (it.result && it.result.sets || []).length || it.sets), 0); }
+  function rebase(){
+    L.day = L.day || startDay();
+    L.startedAt = Date.now() - Math.round(doneMin() * 60000);
+    L.stale = false; L.restEnd = null; L.timing = null;
+    persist();
+  }
+  // Everything not done yet goes back on the list (skipped, busy, cut for time).
+  function reopenRest(){
+    L.items.forEach(it=>{ if(['skip','cut','busy','deferred'].includes(it.status) && G.pendingItem(it)) it.status = 'todo'; });
+    const n = nextTodo(-1);
+    if(n < 0) return false;
+    L.cur = n; L.phase = 'ex'; L.draft = null; L.fb = null; L.showPlan = false;
+    return true;
+  }
+  // Still to do = not done and still in the rotation (taken out with "לא רלוונטי" = gone).
+  G.pendingItem = it=>{ const e = G.ex(it.exId); return it.status !== 'done' && !!e && e.active; };
+  G.unfinishedCount = function(x){ x = x || L || G.liveLoad(); return x ? x.items.filter(G.pendingItem).length : 0; };
+  const leftTxt = n=> n === 1 ? 'נשאר תרגיל אחד' : 'נשארו ' + n + ' תרגילים';
+  G.leftTxt = leftTxt;
   function closeLive(){
     clearInterval(tickT); tickT = null;
     const el = document.getElementById('gymLive'); if(el) el.remove();
@@ -323,7 +349,7 @@
     if(!L.draft || L.draft.exId !== it.exId){ L.draft = Object.assign(draftFor(it), { exId: it.exId }); persist(); }
     const d = L.draft;
     let h = '';
-    if(L.fb) h += '<div class="gy-fb ' + L.fb.kind + '" id="gyFb"><div class="font-black text-gray-100">נרשם: ' + esc(L.fb.name) + '</div><div>' + esc(L.fb.line) + '</div>' +
+    if(L.fb) h += '<div class="gy-fb ' + L.fb.kind + '" id="gyFb"><div class="font-black text-gray-100">' + (L.fb.title ? esc(L.fb.title) + ': ' : 'נרשם: ') + esc(L.fb.name) + '</div><div>' + esc(L.fb.line) + '</div>' +
       '<div class="font-black mt-1 ' + (L.fb.kind==='up'?'txt-green':L.fb.kind==='down'?'txt-amber':'txt-sky') + '">' + esc(L.fb.verdict) + '</div>' +
       '<div class="text-[12px] gy-mut mt-1">בפעם הבאה: ' + esc(L.fb.next) + '</div>' + (L.fb.cut ? '<div class="text-[12px] txt-amber mt-1">' + esc(L.fb.cut) + '</div>' : '') + '</div>';
     h += '<div class="text-center mt-1"><div style="font-size:34px">' + (e.icon||'🏋️') + '</div><div class="gy-big" style="font-size:34px">' + esc(e.he) + '</div><div class="gy-mut font-bold">' + esc(e.en||'') + (it.light?' · <span class="txt-amber">יום קל לאזור</span>':'') + '</div></div>';
@@ -360,7 +386,20 @@
     h += '<div class="gy-grid2 mt-3"><button id="gyRestBtn" class="gy-btn" style="height:48px;font-size:13px">⏱ מנוחה ' + (e.rest||75) + 'ש׳</button>' +
       '<button id="gyBusy" class="gy-btn gy-warn" style="height:48px;font-size:13px">🚧 מכשיר תפוס</button>' +
       '<button id="gySwap" class="gy-btn" style="height:44px;font-size:12px">🔁 החלפת תרגיל</button>' +
-      '<button id="gySkip" class="gy-btn" style="height:44px;font-size:12px">דילוג</button></div>';
+      '<button id="gySkip" class="gy-btn" style="height:44px;font-size:12px">דילוג</button>' +
+      '<button id="gyAddEx" class="gy-btn" style="height:44px;font-size:12px">+ הוספת תרגיל</button>' +
+      '<button id="gyOff" class="gy-btn" style="height:44px;font-size:12px">🚫 לא רלוונטי</button></div>';
+    if(L.addOpen){
+      const inPlan = new Set(L.items.filter(y=> y.status !== 'cut').map(y=> y.exId));
+      const cands = G.lib().filter(x=> x.active && !G.isPaused(x) && !inPlan.has(x.id));
+      h += '<div class="gy-card mt-3"><div class="gy-lbl mb-2">להוסיף אחרי התרגיל הזה:</div>' +
+        Object.entries(G.AREAS).map(([k, lbl])=>{ const xs = cands.filter(x=> x.area === k); return xs.length ? '<div class="text-[11px] gy-mut mt-2">' + lbl + '</div>' + xs.map(x=> '<button class="gy-btn gy-chip m-1" data-addex="' + x.id + '">' + esc(x.he) + '</button>').join('') : ''; }).join('') +
+        '<button id="gyNewExBtn" class="gy-btn gy-pri mt-3" style="height:44px;width:100%;font-size:13px">🆕 תרגיל חדש שלא קיים במאגר</button></div>';
+    }
+    if(L.offAsk){
+      h += '<div class="gy-card gy-warn mt-3" style="font-size:13px"><div class="font-black text-gray-100">להוציא את "' + esc(e.he) + '" מהסבב?</div><div class="gy-mut mt-1">הוא לא ייכנס יותר לאימונים. ההיסטוריה נשמרת, ואפשר להחזיר אותו ממעקב התרגילים.</div>' +
+        '<div class="gy-grid2 mt-3"><button id="gyOffYes" class="gy-btn gy-danger" style="height:44px">כן, להוציא</button><button id="gyOffNo" class="gy-btn" style="height:44px">ביטול</button></div></div>';
+    }
     if(L.swapOpen){
       const alts = G.lib().filter(x=> x.active && x.slot === e.slot && x.id !== e.id && !L.items.some(y=> y.exId === x.id && y.status !== 'cut'));
       h += '<div class="gy-card mt-3"><div class="gy-lbl mb-2">להחליף ב:</div>' + (alts.length ? alts.map(x=> '<button class="gy-btn gy-chip m-1" data-swap="' + x.id + '">' + esc(x.he) + '</button>').join('') : '<div class="gy-mut text-[12px]">אין תרגיל חלופי פעיל לאותו אזור</div>') + '</div>';
@@ -398,7 +437,9 @@
     if(deferred.length || cut.length) h += '<div class="text-[12px] gy-mut mt-2">' + (deferred.length ? 'נדחה לאימון הבא: ' + deferred.map(it=> G.ex(it.exId).he).join(', ') + '. ' : '') + (cut.length ? 'קוצר בגלל זמן: ' + cut.map(it=> G.ex(it.exId).he).join(', ') + '.' : '') + '</div>';
     h += q('קושי כללי (1 עד 10)', 'overall', 10) + q('אנרגיה (1 עד 10)', 'energy', 10) + q('תפיסות אחרי האימון (0 עד 10)', 'after', 10);
     h += '<button id="gySave" class="gy-btn gy-pri mt-5" style="height:64px;font-size:19px;width:100%"' + (done.length?'':' disabled') + '>שמירת האימון</button>';
-    if(!L.stale) h += '<button id="gyBack" class="gy-btn mt-3" style="height:44px;width:100%">חזרה לאימון</button>';
+    const left = L.items.filter(G.pendingItem).length;
+    if(left) h += '<button id="gyBackEx" class="gy-btn gy-warn mt-3" style="height:54px;width:100%;font-size:15px">↩ חזרה לתרגילים · ' + leftTxt(left) + '</button>';
+    else h += '<button id="gyBack" class="gy-btn mt-3" style="height:44px;width:100%">חזרה לאימון</button>';
     if(!done.length) h += '<button id="gyDiscard" class="gy-btn gy-danger mt-3" style="height:44px;width:100%">יציאה בלי לשמור</button>';
     return h;
   }
@@ -444,7 +485,7 @@
     const prio = it=>{ const e = G.ex(it.exId); return (e.big?3:0) + (e.slot==='core1'?2:0) + ({legs:2,glutes:2,core:1}[e.area]||0); };
     const cut = [];
     while(elapsed()/60000 + remainEst() + G.COOL > limitMin()){
-      const cand = todo().filter(({it})=> !G.ex(it.exId).big && G.ex(it.exId).slot !== 'core1');
+      const cand = todo().filter(({it})=> !it.added && !G.ex(it.exId).big && G.ex(it.exId).slot !== 'core1');   // what she added by hand stays
       if(!cand.length) break;
       cand.sort((a,b)=> prio(a.it) - prio(b.it));
       cand[0].it.status = 'cut'; cut.push(G.ex(cand[0].it.exId).he);
@@ -452,7 +493,7 @@
     return cut.length ? 'כדי לסיים בזמן, ויתרנו היום על: ' + cut.join(', ') : '';
   }
   function advance(){
-    L.draft = null; L.timing = null; L.swapOpen = false;
+    L.draft = null; L.timing = null; L.swapOpen = false; L.addOpen = false; L.offAsk = false;
     const cutMsg = timeGuard();
     if(cutMsg && L.fb) L.fb.cut = cutMsg; else if(cutMsg) L.fb = { kind:'same', name:'זמן', line:'', verdict:cutMsg, next:'' };
     const n = nextTodo(L.cur);
@@ -524,7 +565,14 @@
       if(d.perSet) syncPerSet();
       persist(); render();
     });
-    el.querySelectorAll('[data-field]').forEach(inp=> inp.onchange = ()=>{ const d = L.draft; const v = parseFloat(inp.value); if(!(v>=0)) return; d[inp.dataset.field] = inp.dataset.field==='kg' ? v : Math.round(v); if(d.perSet) syncPerSet(); persist(); render(); });
+    // Typed numbers are kept as they are typed, without redrawing the screen: a redraw on
+    // blur ate the first tap on "בוצע" right after typing a weight.
+    el.querySelectorAll('[data-field]').forEach(inp=>{
+      const k = inp.dataset.field;
+      inp.oninput = ()=>{ const d = L.draft; const v = parseFloat(inp.value); if(!(v>=0)) return; d[k] = k==='kg' ? v : Math.round(v);
+        if(d.perSet){ syncPerSet(); if(k !== 'sets') el.querySelectorAll('[data-ps][data-k="' + k + '"]').forEach(x=> x.value = d[k]); } persist(); };
+      if(k === 'sets') inp.onchange = ()=> render();      // the per-set table needs new rows
+    });
     el.querySelectorAll('[data-rpegrid] [data-rpe]').forEach(b=> b.onclick = ()=>{
       const i = +b.dataset.rpe, grid = b.parentElement.dataset.rpegrid, d = L.draft;
       const cur = grid === 'time' ? d.sets[d.sets.length-1].rpe : d.rpe;
@@ -540,7 +588,27 @@
     on('#gyRestBtn', ()=>{ const e = G.ex(L.items[L.cur].exId); L.restEnd = Date.now() + (e.rest||75)*1000; persist(); renderRest(); });
     on('#gyBusy', ()=>{ L.items[L.cur].status = 'busy'; L.fb = null; advance(); });
     on('#gySkip', ()=>{ L.items[L.cur].status = 'skip'; L.fb = null; advance(); });
-    on('#gySwap', ()=>{ L.swapOpen = !L.swapOpen; render(); });
+    on('#gySwap', ()=>{ L.swapOpen = !L.swapOpen; L.addOpen = false; L.offAsk = false; render(); });
+    on('#gyAddEx', ()=>{ L.addOpen = !L.addOpen; L.swapOpen = false; L.offAsk = false; render(); });
+    on('#gyOff', ()=>{ L.offAsk = !L.offAsk; L.swapOpen = false; L.addOpen = false; render(); });
+    on('#gyOffNo', ()=>{ L.offAsk = false; render(); });
+    on('#gyOffYes', ()=>{
+      const it = L.items[L.cur]; const nm = G.ex(it.exId).he;
+      G.setRelevant(it.exId, false);
+      it.status = 'skip'; L.offAsk = false; L.fb = { kind:'same', name: nm, line:'', verdict:'ההיסטוריה שלו נשמרה', next:'אפשר להחזיר אותו ממעקב התרגילים', title:'הוצא מהסבב' };
+      advance();
+    });
+    // Added by hand: goes right after the current exercise, with its own recommendation.
+    const insertEx = id=>{
+      const e = G.ex(id); if(!e) return;
+      if(L.items.some(y=> y.exId === id && y.status !== 'cut' && y.status !== 'skip')){ L.addOpen = false; persist(); render(); B().showToast(e.he + ' כבר נמצא באימון של היום'); return; }
+      const rec = G.recommend(id) || {}; rec.sets = 2;
+      L.items.splice(L.cur + 1, 0, { exId:id, sets:2, rec, light:false, note:'נוסף ידנית', status:'todo', result:null, verdict:null, added:true });
+      L.addOpen = false; persist(); render();
+      B().showToast('נוסף אחרי התרגיל הנוכחי: ' + e.he + ' ✓');
+    };
+    el.querySelectorAll('[data-addex]').forEach(b=> b.onclick = ()=> insertEx(b.dataset.addex));
+    on('#gyNewExBtn', ()=> G.openNewExercise && G.openNewExercise(id=> insertEx(id)));
     el.querySelectorAll('[data-swap]').forEach(b=> b.onclick = ()=>{
       const it = L.items[L.cur]; const id = b.dataset.swap;
       it.exId = id; it.rec = G.recommend(id) || {}; it.rec.sets = it.sets; L.draft = null; L.swapOpen = false; persist(); render();
@@ -553,6 +621,7 @@
     on('#gyCoolDone', ()=>{ L.phase = 'sum'; persist(); render(); });
     on('#gyCoolSkip', ()=>{ L.phase = 'sum'; persist(); render(); });
     el.querySelectorAll('[data-q]').forEach(b=> b.onclick = ()=>{ L.sum[b.dataset.q] = +b.dataset.v; persist(); render(); });
+    on('#gyBackEx', ()=>{ if(L.stale) rebase(); if(reopenRest()){ persist(); render(); } });
     on('#gyBack', ()=>{ const n = nextTodo(-1); if(n >= 0){ L.cur = n; L.phase = 'ex'; } else L.phase = 'cool'; persist(); render(); });
     on('#gyDiscard', ()=>{ G.liveSave(null); L = null; closeLive(); });
     on('#gySave', ()=> saveSession());
@@ -570,7 +639,7 @@
     if(L.stale) return Math.max(1, est);
     return Math.max(1, Math.min(Math.round(elapsed()/60000), limitMin() + 15));
   }
-  function startDay(){ const d = new Date(L.startedAt); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+  function startDay(){ if(L.day) return L.day; const d = new Date(L.startedAt); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
   function saveSession(){
     if(!L || L.phase === 'saved' || L.saving) return;
     const b = B(); const today = startDay();
@@ -580,6 +649,8 @@
     const minutes = sessionMinutes();
     const ov = L.sum.overall;
     const level = ov == null ? 'mid' : ov <= 5 ? 'low' : ov <= 7.5 ? 'mid' : 'high';
+    const cont = L.continueOf && (b.workouts()[today] || []).find(x=> x.id === L.continueOf);
+    if(cont) return saveContinuation(cont, done, minutes, today);
     const id = b.uid();
     const w = { id, type:'gym', level, minutes, kcal: b.estKcal('gym', level, minutes), kcalNet: b.estKcalNet('gym', level, minutes),
       note: L.label + ' · ' + done.length + ' תרגילים',
@@ -591,9 +662,68 @@
       cut: L.items.filter(it=> it.status === 'cut').map(it=> it.exId),
       skipped: L.items.filter(it=> it.status === 'skip').map(it=> it.exId),
       verdicts: Object.fromEntries(done.map(it=> [it.exId, it.verdict && it.verdict.kind])),
-      planned: L.items.length, doneN: done.length, at: Date.now() };
+      planned: L.items.length, doneN: done.length, left: L.items.filter(G.pendingItem).map(it=> it.exId), at: Date.now() };
     G.save();
     b.addWorkout(w, today);
     L.phase = 'saved'; persist(); render();
   }
+  function saveContinuation(w, done, minutes, day){
+    const b = B(), S = G.state(), meta = S.sessions[w.id] || {};
+    const add = done.map(it=> ({ name: G.exName(G.ex(it.exId)), exId: it.exId, sets: it.result.sets }));
+    w.exercises = (w.exercises || []).concat(add);
+    w.minutes = (+w.minutes || 0) + minutes;
+    w.kcal = b.estKcal('gym', w.level || 'mid', w.minutes); w.kcalNet = b.estKcalNet('gym', w.level || 'mid', w.minutes);
+    w.note = (meta.label || L.label) + ' · ' + w.exercises.length + ' תרגילים';
+    const rest = L.items.filter(G.pendingItem).map(it=> it.exId);
+    S.sessions[w.id] = Object.assign(meta, { doneN: (+meta.doneN || 0) + done.length, durationMin: w.minutes, left: rest,
+      deferred: L.items.filter(it=> it.status === 'busy' || it.status === 'deferred').map(it=> it.exId),
+      verdicts: Object.assign({}, meta.verdicts, Object.fromEntries(done.map(it=> [it.exId, it.verdict && it.verdict.kind]))), at: Date.now() });
+    G.save();
+    b.updateWorkout(w, day);
+    L.phase = 'saved'; persist(); render();
+  }
+  // The newest self-made workout from today that stopped before the end.
+  G.unfinishedSaved = function(){
+    if(!B()) return null;
+    const today = B().todayKey();
+    const S = G.state();
+    const ids = Object.keys(S.sessions).filter(id=>{ const m = S.sessions[id]; return m && !m.trainer && m.label && m.day === today && !m.dismissed && Array.isArray(m.left) && m.left.length; });
+    if(!ids.length) return null;
+    ids.sort((a, b2)=> (S.sessions[b2].at||0) - (S.sessions[a].at||0));
+    const id = ids[0], m = S.sessions[id];
+    if(!(B().workouts()[today] || []).some(w=> w.id === id)) return null;
+    const left = m.left.filter(x=> G.ex(x) && G.ex(x).active);
+    return left.length ? { id, label: m.label, left, doneN: +m.doneN || 0 } : null;
+  };
+  G.continueSaved = function(){
+    const u = G.unfinishedSaved(); if(!u) return;
+    L = { v:1, startedAt:Date.now(), phase:'ex', soreness:0, areas:{}, flags:[], minutes: Math.max(15, Math.round(u.left.reduce((a, x)=> a + G.estMin(G.ex(x), 2), 0)) + 15),
+      label: u.label, continueOf: u.id, day: B().todayKey(), warmMin: 0, sum:{},
+      items: u.left.map(x=>{ const rec = G.recommend(x) || {}; rec.sets = 2; return { exId:x, sets:2, rec, light:false, note:'', status:'todo', result:null, verdict:null }; }), cur: 0 };
+    persist(); G.openLive();
+  };
+  G.renderNudge = function(){
+    const box = document.getElementById('gymNudge'); if(!box || !B()) return;
+    injectCss();
+    const open = G.liveLoad();
+    let h = '';
+    if(open && open.phase && !['pre','saved'].includes(open.phase)){
+      const done = open.items.filter(it=> it.status === 'done').length, all = done + open.items.filter(G.pendingItem).length;
+      h = '<div class="gy-card gy-warn mb-4" style="padding:12px"><div class="font-black text-gray-100">🏋️ יש אימון פתוח' + (all ? ' · בוצעו ' + done + ' מתוך ' + all : '') + '</div>' +
+        '<button id="gnResume" class="gy-btn gy-pri mt-2" style="height:46px;width:100%">↩ חזרה לאימון</button></div>';
+    } else {
+      const uf = G.unfinishedSaved();
+      if(uf) h = '<div class="gy-card gy-warn mb-4" style="padding:12px"><div class="font-black text-gray-100">⚠️ האימון של היום לא הושלם</div><div class="text-[12px] gy-mut mt-1">' + leftTxt(uf.left.length) + ': ' + esc(uf.left.map(x=> G.ex(x).he).join(', ')) + '</div>' +
+        '<div class="gy-grid2 mt-2"><button id="gnCont" class="gy-btn gy-pri" style="height:46px">▶ המשך האימון</button><button id="gnX" class="gy-btn" style="height:46px;font-size:12px">לא היום</button></div></div>';
+    }
+    box.innerHTML = h;
+    const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
+    on('gnResume', ()=> G.openLive({ resume:true }));
+    on('gnCont', ()=> G.continueSaved());
+    on('gnX', ()=> G.dismissUnfinished());
+  };
+  G.dismissUnfinished = function(){
+    const u = G.unfinishedSaved(); if(!u) return;
+    G.state().sessions[u.id].dismissed = true; G.save(); B().renderAll();
+  };
 })();

@@ -299,7 +299,7 @@
   </header>
 
   <!-- ===== TAB: היום (food day) ===== -->
-  <div id="tab-today" data-tab>
+  <div id="tab-today" data-tab><div id="gymNudge"></div>
 
   <!-- Gamification rank strip (on desktop the level lives in the sidebar instead) -->
   <button id="rankStrip" class="glass-hl rounded-2xl px-3.5 py-2.5 mb-5 w-full flex items-center gap-3 active:scale-[0.99] transition text-right lg:hidden"></button>
@@ -1317,9 +1317,9 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=16"></script>
-<script src="gym-ui.js?v=16"></script>
-<script src="gym-views.js?v=16"></script>
+<script src="gym-core.js?v=17"></script>
+<script src="gym-ui.js?v=17"></script>
+<script src="gym-views.js?v=17"></script>
 <script src="celebrate.js?v=4"></script>
 <script>
 (function(){
@@ -5582,6 +5582,7 @@
                 <span class="txt-green">${lvl?lvl.label:''}</span>
               </div>
             </div>
+            <button data-editwo="${w.id}" class="text-gray-500 active:text-gray-100 text-base px-1.5 shrink-0" title="עריכת האימון" aria-label="עריכת האימון">✏️</button>
             <button data-delwo="${w.id}" class="text-gray-600 active:text-[#ff4d6d] text-lg px-1.5 shrink-0">🗑</button>
           </div>
           ${woSetsHTML(w)}
@@ -5590,6 +5591,10 @@
     }).join('');
     $('workoutList').querySelectorAll('[data-delwo]').forEach(b=>{
       b.onclick = ()=> deleteWorkout(b.dataset.delwo);
+    });
+    // Any past workout opens in the same editor: date, minutes, exercises, sets, weights.
+    $('workoutList').querySelectorAll('[data-editwo]').forEach(b=>{
+      b.onclick = ()=>{ if(window.Gym && Gym.openEditor) Gym.openEditor(viewKey, b.dataset.editwo); };
     });
     const note = $('workoutKcalNote');
     if(note) note.textContent = 'הערה: "מהאימון" = מה שהאימון הוסיף מעבר למה שהגוף שורף ממילא באותו זמן — זה המספר שמשמש למאזן הקלוריות. "סה״כ" כולל גם את השריפה במנוחה.';
@@ -10321,7 +10326,7 @@
     const p = sb.from('workouts').update(payload).eq('id', w.id);
     cloudRun(payload.exercises !== undefined ? p.then(r=>{ if(!(r && r.error) && w.exPending){ delete w.exPending; save(LS.workouts, allWorkouts); } return r; }) : p, 'workouts', w.id);
   }
-  function renderGymHome(){ if(window.Gym && Gym.renderHome){ Gym.invalidate(); Gym.renderHome(); } }
+  function renderGymHome(){ if(window.Gym && Gym.renderHome){ Gym.invalidate(); Gym.renderHome(); } if(window.Gym && Gym.renderNudge) Gym.renderNudge(); }
   function initGym(){
     if(!window.Gym || !Gym.init) return;
     try{

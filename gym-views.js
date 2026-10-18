@@ -332,6 +332,53 @@
     G.save();
     return id;
   };
+  // ---------- a new exercise, by hand (tracking screen and the live workout) ----------
+  // It joins the same rotation as everything else: equal share per body area, and what
+  // waited longest goes first, so a brand-new exercise shows up within the next workouts.
+  G.openNewExercise = function(onDone, preName){
+    const d = { he: preName || '', area:'legs', kind:'reps', perSide:false, kg:'', reps:'', err:'' };
+    const open = ()=>{
+      const h = '<label><div class="gy-lbl mb-1">שם התרגיל</div><input class="gy-in" id="nxName" value="' + esc(d.he) + '" placeholder="למשל: חתירה בכבל"></label>' +
+        '<div class="gy-lbl mt-3 mb-1">אזור בגוף</div><div class="flex flex-wrap gap-2">' + Object.entries(G.AREAS).map(([k, l])=> '<button class="gy-btn gy-chip' + (d.area===k?' on':'') + '" data-nxa="' + k + '">' + l + '</button>').join('') + '</div>' +
+        '<div class="gy-lbl mt-3 mb-1">איך מודדים</div><div class="flex gap-2"><button class="gy-btn gy-chip' + (d.kind==='reps'?' on':'') + '" data-nxk="reps">משקל וחזרות</button><button class="gy-btn gy-chip' + (d.kind==='time'?' on':'') + '" data-nxk="time">זמן (כמו פלאנק)</button></div>' +
+        '<label class="gy-row mt-3"><input type="checkbox" id="nxSide"' + (d.perSide?' checked':'') + '> <span>כל צד בנפרד</span></label>' +
+        (d.kind==='reps' ? '<div class="gy-grid2 mt-3"><label><div class="gy-lbl mb-1">משקל התחלתי (ק״ג, לא חובה)</div><input class="gy-in" type="number" inputmode="decimal" step="0.5" id="nxKg" value="' + esc(d.kg) + '"></label><label><div class="gy-lbl mb-1">חזרות</div><input class="gy-in" type="number" inputmode="numeric" id="nxReps" value="' + esc(d.reps) + '" placeholder="10"></label></div>' : '') +
+        (d.err ? '<div class="txt-amber text-[12px] mt-2">' + esc(d.err) + '</div>' : '') +
+        '<div class="text-[11px] gy-mut mt-3">התרגיל נכנס לסבב לפי אותו היגיון: חלוקה שווה בין אזורי הגוף, ומה שחיכה הכי הרבה נכנס קודם. הכול בתוך הזמן שבוחרים לאימון.</div>' +
+        '<button class="gy-btn gy-pri mt-4" id="nxSave" style="height:52px;width:100%">שמירת התרגיל</button>';
+      sheet('🆕 תרגיל חדש', h, (m, close)=>{
+        const grab = ()=>{ d.he = m.querySelector('#nxName').value; d.perSide = m.querySelector('#nxSide').checked; const k = m.querySelector('#nxKg'), r = m.querySelector('#nxReps'); if(k) d.kg = k.value; if(r) d.reps = r.value; };
+        m.querySelectorAll('[data-nxa]').forEach(b=> b.onclick = ()=>{ grab(); d.area = b.dataset.nxa; open(); });
+        m.querySelectorAll('[data-nxk]').forEach(b=> b.onclick = ()=>{ grab(); d.kind = b.dataset.nxk; open(); });
+        m.querySelector('#nxSave').onclick = ()=>{
+          grab();
+          const name = d.he.trim();
+          if(!name){ d.err = 'צריך לכתוב שם לתרגיל'; open(); return; }
+          const known = G.matchId(name);
+          if(known){
+            const x = G.ex(known), back = x && !x.active;
+            if(back) G.setLib(known, { active:true, pausedUntil:null });
+            close(); B().showToast(back ? 'התרגיל כבר היה במאגר, והוחזר לסבב ✓' : 'התרגיל כבר קיים במאגר ✓');
+            if(B().renderAll) B().renderAll();
+            if(onDone) onDone(known);
+            return;
+          }
+          const id = G.addCustom({ he:name, area:d.area, kind:d.kind, perSide:d.perSide });
+          const kg = parseFloat(d.kg);
+          if(d.kind === 'reps' && d.kg !== '' && kg >= 0) G.setLib(id, { work:{ kg, reps: Math.round(+d.reps) || undefined, day: B().todayKey() } });
+          close(); B().showToast('נוסף לסבב: ' + name + ' ✓');
+          if(B().renderAll) B().renderAll();
+          if(onDone) onDone(id);
+        };
+      }, 'gyNewEx');
+    };
+    open();
+  };
+  // Out of the rotation / back in, in one tap. History stays.
+  G.setRelevant = function(id, on){
+    G.setLib(id, on ? { active:true, pausedUntil:null } : { active:false });
+    if(B().renderAll) B().renderAll();
+  };
   // Width-limited, not longest-side-limited: a long WhatsApp scroll capture (1080×5400)
   // would otherwise shrink to ~320px wide and the text would be unreadable.
   function shotB64(file){
@@ -479,14 +526,17 @@
       const v = !last ? '—' : x.kind === 'time' ? G.fmtSec(G.entryStats(last).bestSec) : (G.fmtKg(G.entryStats(last).top) + ' ×' + G.entryStats(last).minReps);
       return '<li data-ex="' + x.id + '" style="cursor:pointer"><span>' + (x.icon||'🏋️') + '</span><span class="flex-1"><b class="text-gray-100">' + esc(x.he) + '</b>' + (G.isPaused(x)?' <span class="gy-mut text-[11px]">(מושהה)</span>':'') + '<div class="text-[11px] gy-mut">' + h.length + ' ביצועים' + (last ? ' · אחרון ' + dshort(last.day) : '') + '</div></span><span class="text-left"><div class="text-gray-100 font-bold">' + v + '</div><div class="text-[11px] ' + tr.cls + '">' + tr.word + '</div></span></li>';
     };
-    let h = '';
+    let h = '<button class="gy-btn gy-pri" id="trNew" style="height:48px;width:100%">+ תרגיל חדש</button>';
     Object.entries(G.AREAS).forEach(([k, lbl])=>{
       const xs = lib.filter(x=> x.area === k && x.active);
       if(xs.length) h += '<div class="gy-lbl mt-3">' + lbl + '</div><ul class="gy-list">' + xs.map(row).join('') + '</ul>';
     });
     const off = lib.filter(x=> !x.active);
     if(off.length) h += '<details class="mt-4"><summary class="gy-lbl" style="cursor:pointer">לא פעילים (' + off.length + ')</summary><ul class="gy-list">' + off.map(row).join('') + '</ul></details>';
-    sheet('📈 מעקב לפי תרגיל', h, m=>{ m.querySelectorAll('[data-ex]').forEach(li=> li.onclick = ()=> G.openExercise(li.dataset.ex)); }, 'gyTrack');
+    sheet('📈 מעקב לפי תרגיל', h, m=>{
+      m.querySelectorAll('[data-ex]').forEach(li=> li.onclick = ()=> G.openExercise(li.dataset.ex));
+      m.querySelector('#trNew').onclick = ()=> G.openNewExercise(()=> G.openTracking());
+    }, 'gyTrack');
   };
   // Single-series line chart (one axis). Points are tappable; a caption shows the value.
   function lineChart(pts, opts){
@@ -522,6 +572,9 @@
     const prReps = Math.max(0, ...pts.filter(p=> p.st.top === prKg).map(p=> p.st.maxReps));
     const o = S().lib[id] || {};
     let html = '<div class="gy-mut font-bold" style="margin-top:-8px">' + esc(x.en||'') + ' · ' + (G.AREAS[x.area]||'') + (x.note ? ' · ' + esc(x.note) : '') + '</div>';
+    html += x.active
+      ? '<button class="gy-btn mt-3" id="xsOff" style="height:44px;width:100%;font-size:13px">🚫 לא רלוונטי יותר · להוציא מהסבב</button>'
+      : '<div class="gy-card gy-warn mt-3" style="padding:10px;font-size:12px">התרגיל מחוץ לסבב. ההיסטוריה שלו נשמרת.</div><button class="gy-btn gy-pri mt-2" id="xsOn" style="height:44px;width:100%;font-size:13px">↩️ להחזיר לסבב</button>';
     html += '<div class="gy-card mt-3" style="font-size:13px;line-height:1.7"><div><span class="gy-lbl">מגמה: </span><b class="' + tr.cls + '">' + tr.word + '</b></div>' +
       (rec ? '<div><span class="gy-lbl">בפעם הבאה: </span><b class="text-gray-100">' + esc(G.recLine(rec, x)) + '</b></div><div class="text-[11px] gy-mut">' + esc(rec.why||'') + '</div>' : '') + '</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px" class="mt-3">' +
@@ -548,6 +601,9 @@
       cap('w', pts, p=> dshort(p.day) + ' · ' + G.setsLine(p.e, x) + (p.st.rpe!=null ? ' · קושי ' + r1(p.st.rpe) : ''));
       cap('r', rp, p=> dshort(p.day) + ' · קושי ' + r1(p.y) + ' · ' + G.setsLine(p.e, x));
       m.querySelectorAll('tr[data-day]').forEach(tr=> tr.onclick = ()=> G.openDay(tr.dataset.day));
+      const rel = on=>{ G.setRelevant(id, on); B().showToast(on ? 'הוחזר לסבב ✓' : 'הוצא מהסבב. ההיסטוריה נשמרה ✓'); G.openExercise(id); if(document.getElementById('gyTrack')) G.openTracking(); };
+      const xo = m.querySelector('#xsOff'); if(xo) xo.onclick = ()=> rel(false);
+      const xn = m.querySelector('#xsOn'); if(xn) xn.onclick = ()=> rel(true);
       m.querySelector('#xsSave').onclick = ()=>{
         const patch = { active: m.querySelector('#xsActive').checked, pausedUntil: m.querySelector('#xsPause').value || null, note: m.querySelector('#xsNote').value || undefined };
         if(time){ const sec = +m.querySelector('#xsSec').value; patch.work = sec > 0 ? { sec, day: B().todayKey() } : null; }
