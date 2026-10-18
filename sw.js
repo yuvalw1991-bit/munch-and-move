@@ -5,11 +5,11 @@
 //   • cross-origin (CDN/SDK)  → stale-while-revalidate
 //   • /api/* and non-GET      → always network (dynamic AI calls, Supabase writes)
 // Bump CACHE when the shell asset list changes to evict the old cache.
-const CACHE = 'munch-move-v35';  // v20 (v19 added the gym files): gym live mode (gym-*.js precached; bump ?v= in index.html AND here on every change)
+const CACHE = 'munch-move-v37';  // v20 (v19 added the gym files): gym live mode (gym-*.js precached; bump ?v= in index.html AND here on every change)
 
 const SHELL = [
   '/', '/index.html', '/manifest.json',
-  '/gym-core.js?v=17', '/gym-ui.js?v=17', '/gym-views.js?v=17', '/celebrate.js?v=4',
+  '/gym-core.js?v=19', '/gym-ui.js?v=19', '/gym-views.js?v=19', '/celebrate.js?v=4',
   '/vendor/zxing.min.js',                 // barcode decoder — precached so the first scan doesn't wait on the network
   '/favicon-32.png', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png',
   '/fonts/Polin-Light.woff2', '/fonts/Polin-Regular.woff2', '/fonts/Polin-Medium.woff2',

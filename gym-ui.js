@@ -91,7 +91,7 @@
     const ws = G.weekStatus();
     const nx = G.nextWorkout();
     const prev = G.planSession({});
-    const recent = ['leg_press','lat_pulldown','shoulder_press','leg_curl','hip_thrust','row','chest_press','kickback']
+    const recent = ['leg_press','lat_pulldown','shoulder_press','leg_curl','hip_thrust','selector_row','chest_press','kickback']
       .map(id=>{ const e = G.ex(id); if(!e || !e.active) return null; const r = G.readiness(id); return r ? { e, r } : null; })
       .filter(Boolean).slice(0,4);
     const streak = G.streakWeeks();
@@ -390,7 +390,7 @@
       '<button id="gyAddEx" class="gy-btn" style="height:44px;font-size:12px">+ הוספת תרגיל</button>' +
       '<button id="gyOff" class="gy-btn" style="height:44px;font-size:12px">🚫 לא רלוונטי</button></div>';
     if(L.addOpen){
-      const inPlan = new Set(L.items.filter(y=> y.status !== 'cut').map(y=> y.exId));
+      const inPlan = new Set(L.items.filter(y=> y.status !== 'cut').map(y=> G.target(y.exId)));
       const cands = G.lib().filter(x=> x.active && !G.isPaused(x) && !inPlan.has(x.id));
       h += '<div class="gy-card mt-3"><div class="gy-lbl mb-2">להוסיף אחרי התרגיל הזה:</div>' +
         Object.entries(G.AREAS).map(([k, lbl])=>{ const xs = cands.filter(x=> x.area === k); return xs.length ? '<div class="text-[11px] gy-mut mt-2">' + lbl + '</div>' + xs.map(x=> '<button class="gy-btn gy-chip m-1" data-addex="' + x.id + '">' + esc(x.he) + '</button>').join('') : ''; }).join('') +
@@ -601,7 +601,7 @@
     // Added by hand: goes right after the current exercise, with its own recommendation.
     const insertEx = id=>{
       const e = G.ex(id); if(!e) return;
-      if(L.items.some(y=> y.exId === id && y.status !== 'cut' && y.status !== 'skip')){ L.addOpen = false; persist(); render(); B().showToast(e.he + ' כבר נמצא באימון של היום'); return; }
+      if(L.items.some(y=> G.target(y.exId) === G.target(id) && y.status !== 'cut' && y.status !== 'skip')){ L.addOpen = false; persist(); render(); B().showToast(e.he + ' כבר נמצא באימון של היום'); return; }
       const rec = G.recommend(id) || {}; rec.sets = 2;
       L.items.splice(L.cur + 1, 0, { exId:id, sets:2, rec, light:false, note:'נוסף ידנית', status:'todo', result:null, verdict:null, added:true });
       L.addOpen = false; persist(); render();

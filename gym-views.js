@@ -159,7 +159,7 @@
       day, minutes: orig ? (orig.minutes || 0) : 55, note: orig ? (orig.note || '') : 'Full Body',
       // Keep each entry's own name and id; the library match is only a default for the
       // picker, and an entry is renamed only when the picker is actually changed.
-      ex: orig ? (orig.exercises||[]).map(e=> ({ exId: e.exId || G.matchId(e.name) || '', orig: e, name: e.name, note: e.note || '', sets: (e.sets||[]).map(s=> Object.assign({}, s)) })) : [],
+      ex: orig ? (orig.exercises||[]).map(e=> ({ exId: (e.exId ? G.target(e.exId) : G.matchId(e.name)) || '', orig: e, name: e.name, note: e.note || '', sets: (e.sets||[]).map(s=> Object.assign({}, s)) })) : [],
     };
     const opts = sel=> '<option value="">— אחר —</option>' + lib.map(x=> '<option value="' + x.id + '"' + (x.id===sel?' selected':'') + '>' + esc(x.he) + (x.active?'':' (לא פעיל)') + '</option>').join('');
     const sp = { open: !orig && !pre, text: eopts.autoText || '', img:null, busy:false, err:'' };
@@ -527,6 +527,13 @@
       return '<li data-ex="' + x.id + '" style="cursor:pointer"><span>' + (x.icon||'🏋️') + '</span><span class="flex-1"><b class="text-gray-100">' + esc(x.he) + '</b>' + (G.isPaused(x)?' <span class="gy-mut text-[11px]">(מושהה)</span>':'') + '<div class="text-[11px] gy-mut">' + h.length + ' ביצועים' + (last ? ' · אחרון ' + dshort(last.day) : '') + '</div></span><span class="text-left"><div class="text-gray-100 font-bold">' + v + '</div><div class="text-[11px] ' + tr.cls + '">' + tr.word + '</div></span></li>';
     };
     let h = '<button class="gy-btn gy-pri" id="trNew" style="height:48px;width:100%">+ תרגיל חדש</button>';
+    const dups = G.suspectDuplicates();
+    if(dups.length) h += '<div class="gy-card gy-warn mt-3" style="padding:12px"><div class="font-black text-gray-100">נראה כמו אותו תרגיל פעמיים</div><div class="text-[11px] gy-mut mt-1">איחוד מחבר את ההיסטוריה של שניהם תחת שם אחד. אפשר לבטל בכל רגע מעמוד התרגיל.</div>' +
+      dups.map(d=>{ const a = G.ex(d.a), b = G.ex(d.b);
+        return '<div class="mt-3" style="border-top:1px solid rgba(255,255,255,.06);padding-top:10px"><div class="text-[13px] text-gray-100 font-bold">' + esc(a.he) + ' <span class="gy-mut">·</span> ' + esc(b.he) + '</div>' +
+          '<div class="flex flex-wrap gap-2 mt-2"><button class="gy-btn gy-chip" data-keep="' + d.a + '" data-drop="' + d.b + '">לאחד בשם "' + esc(a.he) + '"</button>' +
+          '<button class="gy-btn gy-chip" data-keep="' + d.b + '" data-drop="' + d.a + '">לאחד בשם "' + esc(b.he) + '"</button>' +
+          '<button class="gy-btn gy-chip" data-dupok="' + d.key + '">לא אותו תרגיל</button></div></div>'; }).join('') + '</div>';
     Object.entries(G.AREAS).forEach(([k, lbl])=>{
       const xs = lib.filter(x=> x.area === k && x.active);
       if(xs.length) h += '<div class="gy-lbl mt-3">' + lbl + '</div><ul class="gy-list">' + xs.map(row).join('') + '</ul>';
@@ -536,6 +543,12 @@
     sheet('📈 מעקב לפי תרגיל', h, m=>{
       m.querySelectorAll('[data-ex]').forEach(li=> li.onclick = ()=> G.openExercise(li.dataset.ex));
       m.querySelector('#trNew').onclick = ()=> G.openNewExercise(()=> G.openTracking());
+      m.querySelectorAll('[data-keep]').forEach(b=> b.onclick = ()=>{
+        const keep = G.ex(b.dataset.keep), drop = G.ex(b.dataset.drop);
+        if(G.mergeInto(b.dataset.drop, b.dataset.keep)) B().showToast('אוחד: ' + drop.he + ' ← ' + keep.he + ' ✓');
+        if(B().renderAll) B().renderAll(); G.openTracking();
+      });
+      m.querySelectorAll('[data-dupok]').forEach(b=> b.onclick = ()=>{ G.dismissDuplicate(b.dataset.dupok); G.openTracking(); });
     }, 'gyTrack');
   };
   // Single-series line chart (one axis). Points are tappable; a caption shows the value.
@@ -559,6 +572,7 @@
       '<div class="text-[11px] gy-mut mt-1 text-center" data-cap="' + opts.key + '">נגיעה בנקודה מציגה את הפרטים</div></div>';
   }
   G.openExercise = function(id){
+    id = G.target(id);
     const x = G.ex(id); if(!x) return;
     const h = G.historyOf(id).slice().reverse();          // oldest → newest
     const time = x.kind === 'time';
@@ -572,6 +586,9 @@
     const prReps = Math.max(0, ...pts.filter(p=> p.st.top === prKg).map(p=> p.st.maxReps));
     const o = S().lib[id] || {};
     let html = '<div class="gy-mut font-bold" style="margin-top:-8px">' + esc(x.en||'') + ' · ' + (G.AREAS[x.area]||'') + (x.note ? ' · ' + esc(x.note) : '') + '</div>';
+    const from = G.mergedFrom(id);
+    if(from.length) html += '<div class="gy-card mt-3" style="padding:10px;font-size:12px"><span class="gy-lbl">מאוחד כאן גם: </span>' + from.map(f=> '<span class="text-gray-100 font-bold">' + esc(f.he) + '</span> <button class="gy-btn gy-chip" style="font-size:11px;padding:2px 8px" data-unmerge="' + f.id + '">ביטול איחוד</button>').join(' ') + '</div>';
+    html += '<button class="gy-btn mt-3" id="xsMerge" style="height:40px;width:100%;font-size:12px">🔗 זה אותו תרגיל כמו תרגיל אחר</button><div id="xsMergeBox"></div>';
     html += x.active
       ? '<button class="gy-btn mt-3" id="xsOff" style="height:44px;width:100%;font-size:13px">🚫 לא רלוונטי יותר · להוציא מהסבב</button>'
       : '<div class="gy-card gy-warn mt-3" style="padding:10px;font-size:12px">התרגיל מחוץ לסבב. ההיסטוריה שלו נשמרת.</div><button class="gy-btn gy-pri mt-2" id="xsOn" style="height:44px;width:100%;font-size:13px">↩️ להחזיר לסבב</button>';
@@ -604,6 +621,18 @@
       const rel = on=>{ G.setRelevant(id, on); B().showToast(on ? 'הוחזר לסבב ✓' : 'הוצא מהסבב. ההיסטוריה נשמרה ✓'); G.openExercise(id); if(document.getElementById('gyTrack')) G.openTracking(); };
       const xo = m.querySelector('#xsOff'); if(xo) xo.onclick = ()=> rel(false);
       const xn = m.querySelector('#xsOn'); if(xn) xn.onclick = ()=> rel(true);
+      m.querySelectorAll('[data-unmerge]').forEach(b=> b.onclick = ()=>{ G.unmerge(b.dataset.unmerge); B().showToast('האיחוד בוטל ✓'); if(B().renderAll) B().renderAll(); G.openExercise(id); if(document.getElementById('gyTrack')) G.openTracking(); });
+      m.querySelector('#xsMerge').onclick = ()=>{
+        const others = G.lib().filter(o=> o.id !== id).sort((a, b)=> (a.area === x.area ? 0 : 1) - (b.area === x.area ? 0 : 1));
+        const box = m.querySelector('#xsMergeBox');
+        box.innerHTML = '<div class="gy-card mt-2" style="padding:10px"><div class="gy-lbl mb-2">"' + esc(x.he) + '" הוא בעצם:</div>' + others.map(o=> '<button class="gy-btn gy-chip m-1" data-into="' + o.id + '">' + esc(o.he) + '</button>').join('') +
+          '<div class="text-[11px] gy-mut mt-2">ההיסטוריה של "' + esc(x.he) + '" תצטרף לתרגיל שבוחרים, והשם שלו ייעלם מהרשימות. אפשר לבטל.</div></div>';
+        box.querySelectorAll('[data-into]').forEach(b=> b.onclick = ()=>{
+          const into = b.dataset.into;
+          if(G.mergeInto(id, into)) B().showToast('אוחד: ' + x.he + ' ← ' + G.ex(into).he + ' ✓');
+          if(B().renderAll) B().renderAll(); G.openExercise(into); if(document.getElementById('gyTrack')) G.openTracking();
+        });
+      };
       m.querySelector('#xsSave').onclick = ()=>{
         const patch = { active: m.querySelector('#xsActive').checked, pausedUntil: m.querySelector('#xsPause').value || null, note: m.querySelector('#xsNote').value || undefined };
         if(time){ const sec = +m.querySelector('#xsSec').value; patch.work = sec > 0 ? { sec, day: B().todayKey() } : null; }
@@ -932,7 +961,7 @@
   };
   const GYM_TOOLS = new Set(['gym_edit','log_activity','feature_request']);
   G.handles = name=> GYM_TOOLS.has(name);
-  function idOf(name){ return G.ex(name) ? name : G.matchId(name); }
+  function idOf(name){ return G.ex(name) ? G.target(name) : G.matchId(name); }   // a merged id lands on the exercise it joined
   function setsFrom(c, x){
     if(Array.isArray(c.sets) && c.sets.length && typeof c.sets[0] === 'object')
       return c.sets.map(s=> x && x.kind === 'time' ? { kg:0, reps:0, sec:Math.round(+s.seconds || +s.sec || 0), rpe: s.rpe!=null ? +s.rpe : undefined } : { kg:+s.kg||0, reps:Math.round(+s.reps||0), rpe: s.rpe!=null ? +s.rpe : undefined });
@@ -972,7 +1001,7 @@
   function lastStrength(day){ const ws = (B().workouts()[day] || []).filter(w=> G.isStrength(w)); return ws[ws.length-1] || null; }
   function findWo(day, id){
     const ws = (B().workouts()[day] || []);
-    for(let k = ws.length-1; k >= 0; k--){ const w = ws[k]; const i = (w.exercises||[]).findIndex(e=> (e.exId || G.matchId(e.name)) === id); if(i >= 0) return { w, i }; }
+    for(let k = ws.length-1; k >= 0; k--){ const w = ws[k]; const i = (w.exercises||[]).findIndex(e=> (e.exId ? G.target(e.exId) : G.matchId(e.name)) === G.target(id)); if(i >= 0) return { w, i }; }
     return null;
   }
   function apply(c){
@@ -986,7 +1015,7 @@
         need(); const sets = setsFrom(c, x).filter(s=> s.reps > 0 || s.sec > 0 || s.kg > 0);
         if(!sets.length) throw new Error('חסרים סטים');
         const f = findWo(day, id);
-        if(f){ f.w.exercises[f.i].sets = sets; f.w.exercises[f.i].exId = id; b.updateWorkout(f.w, day, true); return x.he + ' עודכן'; }
+        if(f){ const en = f.w.exercises[f.i]; en.sets = sets; if((en.exId ? G.target(en.exId) : G.matchId(en.name)) !== id) en.exId = id; b.updateWorkout(f.w, day, true); return x.he + ' עודכן'; }   // keep the original id when it already leads here, so an unmerge still works
         const ws = (b.workouts()[day] || []); let w = ws.find(w=> G.isStrength(w));
         if(w){ w.exercises = (w.exercises||[]).concat({ name:G.exName(x), exId:id, sets }); b.updateWorkout(w, day, true); }
         else { w = { id:b.uid(), type:'gym', level:'mid', minutes:0, kcal:0, kcalNet:0, note:'Full Body · מהעוזר', exercises:[{ name:G.exName(x), exId:id, sets }] }; b.addWorkout(w, day, true); S().sessions[w.id] = { day, manual:true, at:Date.now() }; }

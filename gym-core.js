@@ -29,7 +29,7 @@
     { id:'hip_abductor',  he:'הרחקת ירך',           en:'Hip Abductor',   area:'glutes',    slot:'hips',      route:6,   kind:'reps', lo:10, hi:15, steps:STACK, rest:60, icon:'↔️' },
     { id:'hip_adductor',  he:'קירוב ירך',           en:'Hip Adductor',   area:'legs',      slot:'hips',      route:6.1, kind:'reps', lo:10, hi:15, steps:STACK, rest:60, icon:'↔️' },
     { id:'kickback',      he:'קיקבק במכונה',        en:'Kickback',       area:'glutes',    slot:'post',      route:7,   kind:'reps', lo:10, hi:15, steps:STACK, rest:60, icon:'🍑' },
-    { id:'row',           he:'חתירה',               en:'Row',            area:'back',      slot:'back',      route:8,   kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'🚣' },
+    { id:'row',           he:'חתירה',               en:'Row',            area:'back',      slot:'back',      route:8,   kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'🚣', mergedInto:'selector_row' },   // same machine (Yuval, 18.10)
     { id:'selector_row',  he:'חתירה בסלקטור',       en:'Selector Row',   area:'back',      slot:'back',      route:8.1, kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'🚣' },
     { id:'machine_pull',  he:'משיכה במכונת סלקטור', en:'Selector Pull',   area:'back',      slot:'back',      route:8.15,kind:'reps', lo:10, hi:15, steps:STACK, rest:90, active:false, note:'מכונה נפרדת — לא להשוות משקלים לחתירה אחרת', icon:'🚣' },
     { id:'lat_pulldown',  he:'פולי עליון',          en:'Lat Pulldown',   area:'back',      slot:'back',      route:8.2, kind:'reps', lo:10, hi:15, steps:STACK, rest:90, big:true, icon:'⬇️' },
@@ -83,7 +83,7 @@
   }
   // Caches: the library and the derived history are rebuilt at most once per render.
   let _lib = null, _hist = null, _match = new Map();
-  function invalidate(){ _lib = null; _hist = null; _match = new Map(); }
+  function invalidate(){ _lib = null; _raw = null; _hist = null; _match = new Map(); }
   G.invalidate = invalidate;
   G.touchPrefs = ()=>{ S.prefsAt = Date.now(); };
   G.touchTemplates = ()=>{ S.templatesAt = Date.now(); };
@@ -118,14 +118,60 @@
   };
 
   // ---------- Library access ----------
+  // Merged duplicates: an exercise "mergedInto" another one disappears from every list,
+  // and its history counts under the other one. Nothing in the workouts is rewritten,
+  // so a merge can always be undone.
+  let _raw = null;
+  function libRaw(){
+    if(_raw) return _raw;
+    const base = BASE_LIB.concat(S.custom || []);
+    _raw = base.map(e=> Object.assign({}, e, (S.lib||{})[e.id] || {}))
+      .map(e=> Object.assign(e, { active: e.active !== false }));
+    return _raw;
+  }
+  function target(id){
+    let cur = id; const seen = new Set();
+    while(cur && !seen.has(cur)){
+      seen.add(cur);
+      const e = libRaw().find(x=> x.id === cur);
+      if(!e || !e.mergedInto || !libRaw().some(x=> x.id === e.mergedInto)) return cur;
+      cur = e.mergedInto;
+    }
+    return id;   // a loop (two devices merged both ways before syncing): leave it unmerged
+  }
   function libAll(){
     if(_lib) return _lib;
-    const base = BASE_LIB.concat(S.custom || []);
-    _lib = base.map(e=> Object.assign({}, e, (S.lib||{})[e.id] || {}))
-      .map(e=> Object.assign(e, { active: e.active !== false }));
+    _lib = libRaw().filter(e=> target(e.id) === e.id);
     return _lib;
   }
-  function ex(id){ return libAll().find(e=> e.id === id) || null; }
+  function ex(id){ const t = target(id); return libAll().find(e=> e.id === t) || null; }
+  // One exercise into another (fromId's history joins toId). Undo: unmerge(fromId).
+  function mergeInto(fromId, toId){
+    if(!fromId || !toId || target(toId) === fromId || target(fromId) === target(toId)) return false;
+    setLib(fromId, { mergedInto: target(toId) });
+    return true;
+  }
+  function unmerge(fromId){ setLib(fromId, { mergedInto: null }); }
+  function mergedFrom(id){ return libRaw().filter(e=> e.id !== id && e.mergedInto && (target(e.id) === id || e.mergedInto === id)); }
+  // Pairs that look like the same exercise: same body area, and one name contains the other.
+  function suspectDuplicates(){
+    const lib = libAll(), out = [], dismissed = (S.lib.__dupOk || {}).pairs || [];
+    for(let i = 0; i < lib.length; i++) for(let j = i + 1; j < lib.length; j++){
+      const a = lib[i], b = lib[j];
+      if(a.area !== b.area || a.kind !== b.kind) continue;
+      const na = norm(a.he), nb = norm(b.he), ea = norm(a.en), eb = norm(b.en);
+      const same = (na && nb && (na.includes(nb) || nb.includes(na))) || (ea && eb && ea === eb);
+      const key = [a.id, b.id].sort().join('|');
+      if(same && !dismissed.includes(key)) out.push({ a: a.id, b: b.id, key });
+    }
+    return out;
+  }
+  function dismissDuplicate(key){
+    const cur = (S.lib.__dupOk || {}).pairs || [];
+    setLib('__dupOk', { pairs: cur.concat(key) });
+  }
+  G.target = target; G.libRaw = libRaw; G.mergeInto = mergeInto; G.unmerge = unmerge; G.mergedFrom = mergedFrom;
+  G.suspectDuplicates = suspectDuplicates; G.dismissDuplicate = dismissDuplicate;
   function exName(e){ return e ? (e.he + (e.en ? ' (' + e.en + ')' : '')) : ''; }
   function setLib(id, patch){
     S.lib[id] = Object.assign({}, S.lib[id] || {}, patch, { at: Date.now() });
@@ -147,9 +193,9 @@
     parts.delete('');
     let found = null;
     if(parts.size){
-      for(const e of libAll()){
+      for(const e of libRaw()){
         const keys = [e.he, e.en, exName(e)].concat(ALIASES[e.id] || []).concat(e.aliases || []).map(norm).filter(Boolean);
-        if(keys.some(k=> parts.has(k))){ found = e.id; break; }
+        if(keys.some(k=> parts.has(k))){ found = target(e.id); break; }
       }
     }
     _match.set(raw, found);
@@ -168,7 +214,7 @@
       (Array.isArray(all[day]) ? all[day] : []).forEach(w=>{
         (Array.isArray(w && w.exercises) ? w.exercises : []).forEach((e, i)=>{
           if(!e || !Array.isArray(e.sets)) return;
-          let id = e.exId || matchId(e.name);
+          let id = e.exId ? target(e.exId) : matchId(e.name);
           const sets = e.sets.filter(s=> s && ((+s.reps>0) || (+s.sec>0) || (+s.kg>0)));
           if(!sets.length) return;
           // A timed exercise logged with reps only (an old "Plank 2×12") isn't a time.
