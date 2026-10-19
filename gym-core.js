@@ -521,7 +521,7 @@
   function isStrength(w){ return w && (w.type === 'gym' || (Array.isArray(w.exercises) && w.exercises.length && !(S.activities[w.id]))); }
   G.isStrength = isStrength;
   function weekStatus(){
-    const today = B.todayKey(), ws = weekStart(today), all = B.workouts();
+    const today = B.todayKey(), ws = B.shiftKey(today, -B.dateFromKey(today).getDay()), all = B.workouts();   // Sunday first, like "השבוע שלי"
     let strength = 0, pilates = 0, salsa = false;
     for(let i=0;i<7;i++){
       const k = B.shiftKey(ws, i); if(k > today) break;
@@ -536,9 +536,83 @@
     return { strength, pilates, salsa, strengthTarget:S.prefs.strengthTarget, pilatesTarget:S.prefs.pilatesTarget };
   }
   G.weekStatus = weekStatus;
+  // The week she chose. Until she sets it, it's read from the old single rest/trainer day.
+  const KINDS = ['train','trainer','rest'];
+  function weekPlan(){
+    const w = S.prefs.week;
+    if(Array.isArray(w) && w.length === 7 && w.every(k=> KINDS.includes(k))) return { days: w.slice(), set: true };
+    const n = Math.max(1, Math.min(6, +S.prefs.strengthTarget || 4));
+    const rd = S.prefs.restDay != null ? +S.prefs.restDay : -1, td = S.prefs.trainerDay != null ? +S.prefs.trainerDay : -1;
+    let best = null;
+    for(let m = 0; m < 128; m++){
+      const on = d=> !!(m & (1 << d));
+      let c = 0; for(let d = 0; d < 7; d++) if(on(d)) c++;
+      if(c !== n || (rd >= 0 && on(rd)) || (td >= 0 && !on(td))) continue;
+      let pairs = 0, run = 0, maxRun = 0;
+      for(let i = 0; i < 14; i++){ if(on(i % 7)){ run++; maxRun = Math.max(maxRun, run); if(i < 7 && on((i + 6) % 7)) pairs++; } else run = 0; }
+      const sc = maxRun * 10 + pairs;
+      if(!best || sc < best.sc) best = { m, sc };
+    }
+    const days = Array.from({length:7}, (_, d)=> d === td ? 'trainer' : best && (best.m & (1 << d)) ? 'train' : 'rest');
+    return { days, set: false };
+  }
+  function setWeekDay(dow, kind){
+    if(!KINDS.includes(kind) || !(dow >= 0 && dow <= 6)) return;
+    const days = weekPlan().days; days[dow] = kind;
+    S.prefs.week = days;
+    // the older single-day settings and the weekly target follow the plan
+    const keep = (cur, kind)=> (cur != null && days[+cur] === kind) ? +cur : (days.indexOf(kind) >= 0 ? days.indexOf(kind) : null);
+    S.prefs.restDay = keep(S.prefs.restDay, 'rest'); S.prefs.trainerDay = keep(S.prefs.trainerDay, 'trainer');
+    S.prefs.strengthTarget = Math.max(1, days.filter(k=> k !== 'rest').length);
+    S.prefsAt = Date.now(); saveState();
+  }
+  // Rest check — information only, it never blocks a workout.
+  // General strength-training guidance: at least one full rest day a week, and a day
+  // between two full-body sessions (the same muscles rest ~48 hours).
+  function restCheck(){
+    const today = B.todayKey(), all = B.workouts(), plan = weekPlan().days;
+    const sun = B.shiftKey(today, -B.dateFromKey(today).getDay());     // the week as the card shows it
+    // what was done until today, the plan from today on; 3 days on each side so a run
+    // that crosses the week's edge (Sat→Sun) still counts
+    const line = [];
+    for(let i = -3; i < 10; i++){
+      const k = B.shiftKey(sun, i), dow = B.dateFromKey(k).getDay();
+      const did = (all[k] || []).some(isStrength);
+      const kind = k < today ? (did ? 'did' : 'off') : k === today ? (did ? 'did' : plan[dow]) : plan[dow];
+      line.push({ k, dow, did, kind, strength: kind === 'did' || kind === 'train' || kind === 'trainer', inWeek: i >= 0 && i < 7, past: k < today, today: k === today });
+    }
+    const week = line.filter(d=> d.inWeek);
+    const rest = week.filter(d=> !d.strength).length;
+    let run = 0, runHasWeek = false, maxRun = 0, pairs = 0;
+    line.forEach((d, i)=>{
+      if(d.strength){
+        run++; runHasWeek = runHasWeek || d.inWeek;
+        if(runHasWeek) maxRun = Math.max(maxRun, Math.min(run, 7));
+        if(i && line[i-1].strength && (d.inWeek || line[i-1].inWeek)) pairs++;
+      } else { run = 0; runHasWeek = false; }
+    });
+    let level = 'ok', msg;
+    if(rest === 0){ level = 'warn'; msg = 'אין השבוע אף יום מנוחה. כדאי לפחות יום אחד, כדי שהשרירים יתאוששו ויתחזקו.'; }
+    else if(maxRun >= 3){ level = 'warn'; msg = maxRun + ' ימי אימון ברצף. באימוני Full Body כדאי יום הפסקה באמצע, כדי שאותם שרירים ינוחו כ-48 שעות.'; }
+    else if(pairs){ level = 'note'; msg = 'יש ' + (pairs === 1 ? 'פעם אחת' : pairs + ' פעמים') + ' שני ימי אימון ברצף. זה בסדר מדי פעם. אם יש עייפות, אפשר לעשות את היום השני קל יותר.'; }
+    else msg = rest + ' ימי מנוחה, ואין שני אימונים ברצף. יש מספיק מנוחה.';
+    return { level, msg, rest, maxRun, pairs, week };
+  }
+  G.weekPlan = weekPlan; G.setWeekDay = setWeekDay; G.restCheck = restCheck;
+  G.isRestToday = ()=> !!B && weekPlan().days[B.dateFromKey(B.todayKey()).getDay()] === 'rest';
   function nextWorkout(){
     const today = B.todayKey(), all = B.workouts();
     const trainedToday = (all[today] || []).some(isStrength);
+    const wp = weekPlan();
+    if(wp.set){
+      for(let i = trainedToday ? 1 : 0; i < 8; i++){
+        const k = B.shiftKey(today, i), dow = B.dateFromKey(k).getDay(), kind = wp.days[dow];
+        if(kind === 'rest') continue;
+        const when = i === 0 ? 'היום' : i === 1 ? 'מחר' : 'יום ' + DAYS[dow];
+        return kind === 'trainer' ? { day:k, dow, trainer:true, text: when + ' · אימון עם המאמנת' } : { day:k, dow, label:'Full Body', text: when + ' · ⁨Full Body⁩' };
+      }
+      return null;
+    }
     for(let i = trainedToday ? 2 : 0; i < 9; i++){
       const k = B.shiftKey(today, i), dow = B.dateFromKey(k).getDay();
       if(S.prefs.restDay != null && dow === +S.prefs.restDay) continue;

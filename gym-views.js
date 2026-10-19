@@ -1059,6 +1059,15 @@
         const r = allowed[c.key]; if(!r) throw new Error('הגדרה לא מוכרת');
         const v = c.value === null || c.value === 'none' ? null : Math.round(+c.value);
         if(v != null && !(v >= r[0] && v <= r[1])) throw new Error('ערך לא תקין');
+        if(G.weekPlan().set && (c.key === 'restDay' || c.key === 'trainerDay') && v != null){
+          const kind = c.key === 'restDay' ? 'rest' : 'trainer';
+          // the trainer day moves (one trainer day a week): the old one goes back to a regular workout
+          if(kind === 'trainer') G.weekPlan().days.forEach((k, d)=>{ if(k === 'trainer' && d !== v) G.setWeekDay(d, 'train'); });
+          G.setWeekDay(v, kind);
+          const others = G.weekPlan().days.map((k, d)=> k === kind && d !== v ? G.DAYS[d] : null).filter(Boolean);
+          return 'יום ' + G.DAYS[v] + ' סומן ב"השבוע שלי" כ' + (kind === 'rest' ? 'יום מנוחה' : 'יום מאמנת') + (kind === 'rest' && others.length ? '. גם ' + others.join(', ') + (others.length > 1 ? ' נשארו ימי מנוחה' : ' נשאר יום מנוחה') + ', ואפשר לשנות בנגיעה ב"השבוע שלי"' : '');
+        }
+        if(G.weekPlan().set && c.key === 'strengthTarget') throw new Error('היעד השבועי נקבע לפי "השבוע שלי": מספר ימי האימון שם. אפשר לסמן ימים כאימון או כמנוחה');
         S().prefs[c.key] = v; G.touchPrefs(); G.save(); return 'ההגדרה עודכנה';
       }
       case 'set_note': need(); G.setLib(id, { note: String(c.text||'') }); return 'ההערה נשמרה';

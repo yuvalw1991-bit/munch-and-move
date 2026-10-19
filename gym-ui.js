@@ -78,6 +78,22 @@
   // Rendered only while the workouts tab is on screen; a hidden tab is redrawn the
   // moment it opens (the history scan is the expensive part on a long log).
   let homeDirty = false, homeObs = null;
+  // "My week": tap a day to switch training → trainer → rest. Rest days never block anything.
+  function weekCard(){
+    const wp = G.weekPlan(), rc = G.restCheck(), todayDow = B().dateFromKey(B().todayKey()).getDay();
+    const LET = ['א','ב','ג','ד','ה','ו','ש'];
+    const ICON = { train:'🏋️', trainer:'👩‍🏫', rest:'🌿' }, NAME = { train:'אימון', trainer:'מאמנת', rest:'מנוחה' };
+    const doneDow = new Set(rc.week.filter(d=> d.did).map(d=> d.dow));
+    let h = '<div class="gy-card mt-4" style="padding:12px 8px"><div class="gy-row" style="justify-content:space-between"><div class="font-black text-gray-100">🗓️ השבוע שלי</div><div class="text-[11px] gy-mut">נגיעה ביום מחליפה</div></div>';
+    if(!wp.set) h += '<div class="text-[11px] gy-mut mt-1">עוד לא בחרת ימים. זו הצעה לפי ההגדרות הקודמות.</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px" class="mt-2">' + wp.days.map((k, d)=>
+      '<button class="gy-btn" data-wday="' + d + '" style="padding:6px 0;min-height:64px;display:flex;flex-direction:column;align-items:center;gap:2px' + (d === todayDow ? ';border-color:#00ffa3' : '') + (k === 'rest' ? ';opacity:.85' : '') + '" aria-label="יום ' + G.DAYS[d] + ': ' + NAME[k] + '">' +
+        '<span class="text-[11px] font-black ' + (d === todayDow ? 'txt-green' : 'gy-mut') + '">' + LET[d] + '</span><span style="font-size:18px;line-height:1">' + (doneDow.has(d) ? '💪' : ICON[k]) + '</span><span class="text-[10px] gy-mut">' + (doneDow.has(d) ? '✓ בוצע' : NAME[k]) + '</span></button>').join('') + '</div>';
+    const col = rc.level === 'warn' ? 'gy-warn' : '';
+    h += '<div class="gy-card ' + col + ' mt-3" style="padding:10px;font-size:12px;line-height:1.6"><b class="text-gray-100">' + (rc.level === 'warn' ? (rc.rest === 0 ? '⚠️ אין השבוע יום מנוחה' : '⚠️ כדאי לשקול יום מנוחה נוסף') : rc.level === 'note' ? '👌 בסדר, עם הערה קטנה' : '✅ יש מספיק מנוחה') + '</b><div class="gy-mut">' + esc(rc.msg) + '</div>' +
+      '<div class="text-[10px] gy-mut mt-1">מחשב לפי מה שכבר עשית השבוע ומה שתכננת להמשך. זו רק המלצה, ואפשר להתאמן בכל יום.</div></div></div>';
+    return h;
+  }
   G.renderHome = function(){
     const box = document.getElementById('gymHome'); if(!box || !B()) return;
     const tab = document.getElementById('tab-workouts');
@@ -103,8 +119,9 @@
       const uf = G.unfinishedSaved();
       if(uf) h += '<div class="gy-card gy-warn mb-3" style="padding:12px"><div class="font-black text-gray-100">⚠️ האימון של היום לא הושלם</div><div class="text-[12px] gy-mut mt-1">בוצעו ' + uf.doneN + ' תרגילים, ו' + leftTxt(uf.left.length) + ': ' + esc(uf.left.map(x=> G.ex(x).he).join(', ')) + '</div>' +
         '<div class="gy-grid2 mt-2"><button id="gyContinue" class="gy-btn gy-pri" style="height:48px">▶ המשך האימון</button><button id="gyUfX" class="gy-btn" style="height:48px;font-size:12px">לא היום</button></div></div>';
+      if(G.isRestToday() && !G.restCheck().week.some(d=> d.today && d.did)) h += '<div class="text-center text-[13px] font-bold mb-2" style="color:#9be7c4">🌿 היום יום מנוחה. אפשר בכל זאת להתאמן או לרשום פעילות.</div>';
       h += '<button id="gyStart" class="gy-btn gy-pri" style="height:72px;font-size:21px;width:100%">🏋️ התחלת אימון</button>';
-      h += '<div class="text-center mt-2 text-[12px] font-bold gy-mut">האימון הבא: <bdi>' + esc(prev.label) + '</bdi> · ~' + prev.estMin + ' דק׳' + (nx && nx.trainer ? ' · ' + esc(nx.text) : '') + '</div>';
+      h += '<div class="text-center mt-2 text-[12px] font-bold gy-mut">האימון הבא: ' + (nx && nx.trainer ? esc(nx.text) : (nx ? esc(nx.text.split(' · ')[0]) + ' · ' : '') + '<bdi>' + esc(prev.label) + '</bdi> · ~' + prev.estMin + ' דק׳') + '</div>';
     }
     const acts = Object.values(G.state().activities || {});
     const showPil = G.isOwner() || acts.some(a=> a && a.kind === 'pilates');
@@ -114,6 +131,7 @@
       (showPil ? chip('פילאטיס ' + ws.pilates + '/' + ws.pilatesTarget, ws.pilates >= 1) : '') +
       (showSalsa ? chip('סלסה ' + (ws.salsa ? '✓' : '—'), ws.salsa) : '') +
       (streak ? chip('🔥 ' + streak + ' שבועות ברצף', true) : '') + '</div>';
+    h += weekCard();
     if(recent.length){
       h += '<div class="mt-4"><div class="gy-lbl mb-1">התקדמות אחרונה</div><ul class="gy-list">' + recent.map(({e, r})=>{
         const st = G.entryStats(r.rec.last);
@@ -135,6 +153,11 @@
     box.innerHTML = h;
     const on = (id, fn)=>{ const el = document.getElementById(id); if(el) el.onclick = fn; };
     on('gyStart', ()=> G.startLive());
+    box.querySelectorAll('[data-wday]').forEach(b=> b.onclick = ()=>{
+      const d = +b.dataset.wday, order = ['train','trainer','rest'];
+      G.setWeekDay(d, order[(order.indexOf(G.weekPlan().days[d]) + 1) % 3]);
+      G.renderHome();
+    });
     on('gyContinue', ()=> G.continueSaved());
     on('gyUfX', ()=> G.dismissUnfinished());
     on('gySeed', ()=>{ const n = G.seedNow ? G.seedNow() : 0; B().showToast(n ? 'נטענו ' + n + ' ביצועים מההיסטוריה ✓' : 'ההיסטוריה כבר נטענה'); B().renderAll(); });
