@@ -2031,12 +2031,7 @@
       s += '\n⚡ מאזן אנרגיה: נכנס ' + foodK + ' − נשרף ' + burnK + ' = ' + (foodK - burnK) + ' קל׳\n';
     }
 
-    // Active program target.
-    if(program && program.targetKcal){
-      s += '\n🎯 תוכנית: ' + (DIR_LABEL[program.dir] || program.dir || '') + ' · יעד ' + program.targetKcal + ' קל׳ ליום';
-      if(program.macros) s += ' (ח' + program.macros.p + ' פ' + program.macros.c + ' ש' + program.macros.f + ')';
-      s += '\n';
-    }
+    // The day as it was: what was eaten and done. The program itself isn't part of it (Yuval, 19.10).
 
     if(items) s += '\nפריטים:\n' + items;
     return s;
