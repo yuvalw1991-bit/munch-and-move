@@ -333,10 +333,32 @@
     h += '<button id="gySkipWarm" class="gy-btn mt-3" style="height:44px;width:100%;font-size:13px">דילוג על החימום</button>';
     return h;
   }
+  // Warm-up and cool-down machines. Levels differ from gym to gym, so effort is given as
+  // difficulty (1–10) and the machine numbers are a starting point to adjust.
+  const CARDIO = {
+    tread:  { icon:'🚶', name:'הליכון',
+      warm:['⁦5–7⁩ דקות', '⁦5–5.5⁩ קמ״ש · שיפוע 3', 'קושי ⁦5–6⁩: נושמים מהר יותר, ועדיין אפשר לדבר'],
+      cool:['⁦3–5⁩ דקות', '⁦4–4.5⁩ קמ״ש · שיפוע ⁦0–1⁩', 'קושי ⁦2–3⁩: הליכה רגועה, הנשימה נרגעת'] },
+    bike:   { icon:'🚴', name:'אופניים',
+      warm:['⁦5–7⁩ דקות', '⁦70–80⁩ סיבובים לדקה · התנגדות נמוכה, ואחרי 2 דקות עוד דרגה או שתיים', 'קושי ⁦5–6⁩ · הברך כמעט ישרה למטה'],
+      cool:['⁦3–5⁩ דקות', '⁦60–70⁩ סיבובים לדקה · ההתנגדות הכי נמוכה', 'קושי ⁦2–3⁩'] },
+    ellip:  { icon:'🏃', name:'אליפטיקל',
+      warm:['⁦5–7⁩ דקות', 'קצב בינוני · התנגדות נמוכה, ואחרי 2 דקות עוד דרגה', 'קושי ⁦5–6⁩ · הידיות זזות, כדי לחמם גם את הגב והכתפיים'],
+      cool:['⁦3–5⁩ דקות', 'קצב איטי · ההתנגדות הכי נמוכה', 'קושי ⁦2–3⁩'] },
+    stairs: { icon:'🪜', name:'מדרגות',
+      warm:['⁦4–6⁩ דקות', 'קצב איטי: 2 דקות ראשונות לאט מאוד, ואז דרגה אחת למעלה', 'קושי ⁦5–6⁩ · יד קלה על המעקה, בלי להישען'],
+      cool:['⁦3⁩ דקות', 'הקצב הכי איטי, או מעבר להליכה רגועה', 'קושי ⁦2–3⁩'] },
+  };
+  function machineChips(cur, attr){
+    return '<div class="flex flex-wrap gap-2 justify-center mt-3">' + Object.entries(CARDIO).map(([k, m])=>
+      '<button class="gy-btn gy-chip' + (cur === k ? ' on' : '') + '" ' + attr + '="' + k + '">' + m.icon + ' ' + m.name + '</button>').join('') + '</div>';
+  }
+  function cardioPlan(k, part){ const m = CARDIO[k] || CARDIO.tread; return m[part].map((t, i)=> '<div class="' + (i ? 'gy-mut text-[13px] mt-1' : 'gy-mut font-bold mt-2') + '">' + t + '</div>').join(''); }
   function renderWarm(){
-    return '<div class="gy-card mt-3 text-center"><div style="font-size:42px">🚶</div><div class="gy-mid mt-1">חימום · הליכון</div>' +
-      '<div class="gy-mut font-bold mt-2">⁦5–7⁩ דקות · ⁦5–5.5⁩ קמ״ש · שיפוע 3 · קושי ⁦5–6⁩</div>' +
-      '<div class="gy-big mt-5" data-tick="warm">' + mmss(Date.now() - (L.warmAt||Date.now())) + '</div></div>' +
+    const k = CARDIO[L.warmMachine] ? L.warmMachine : 'tread', m = CARDIO[k];
+    return '<div class="gy-card mt-3 text-center"><div style="font-size:42px">' + m.icon + '</div><div class="gy-mid mt-1">חימום · ' + m.name + '</div>' +
+      cardioPlan(k, 'warm') + machineChips(k, 'data-warmm') +
+      '<div class="gy-big" style="margin-top:18px" data-tick="warm">' + mmss(Date.now() - (L.warmAt||Date.now())) + '</div></div>' +
       '<button id="gyWarmDone" class="gy-btn gy-pri mt-5" style="height:68px;font-size:20px;width:100%">✓ סיימתי חימום</button>';
   }
 
@@ -439,8 +461,9 @@
   }
   function renderCool(){
     const leftMin = Math.max(0, limitMin() - elapsed()/60000);
-    return '<div class="gy-card mt-4 text-center"><div style="font-size:40px">🧘</div><div class="gy-mid mt-1">שחרור</div>' +
-      '<div class="gy-mut font-bold mt-2">' + (leftMin >= 3 ? '⁦3–5⁩ דקות הליכה רגועה' : 'נגמר הזמן — אפשר לדלג על השחרור היום') + '</div></div>' +
+    const k = CARDIO[L.coolMachine] ? L.coolMachine : (CARDIO[L.warmMachine] ? L.warmMachine : 'tread'), m = CARDIO[k];
+    return '<div class="gy-card mt-4 text-center"><div style="font-size:40px">' + m.icon + '</div><div class="gy-mid mt-1">שחרור · ' + m.name + '</div>' +
+      (leftMin >= 3 ? cardioPlan(k, 'cool') : '<div class="gy-mut font-bold mt-2">נגמר הזמן, אפשר לדלג על השחרור היום</div>') + machineChips(k, 'data-coolm') + '</div>' +
       '<button id="gyCoolDone" class="gy-btn gy-pri mt-5" style="height:64px;font-size:19px;width:100%">✓ סיימתי</button>' +
       '<button id="gyCoolSkip" class="gy-btn mt-3" style="height:46px;width:100%">דילוג</button>';
   }
@@ -516,6 +539,7 @@
     return cut.length ? 'כדי לסיים בזמן, ויתרנו היום על: ' + cut.join(', ') : '';
   }
   function advance(){
+    if(!L.coolMachine) L.coolMachine = G.state().prefs.coolMachine || L.warmMachine || null;
     L.draft = null; L.timing = null; L.swapOpen = false; L.addOpen = false; L.offAsk = false;
     const cutMsg = timeGuard();
     if(cutMsg && L.fb) L.fb.cut = cutMsg; else if(cutMsg) L.fb = { kind:'same', name:'זמן', line:'', verdict:cutMsg, next:'' };
@@ -575,7 +599,10 @@
     on('#gyPlanClose', ()=>{ L.showPlan = false; render(); });
     const ps = $q('#gyPlanSheet'); if(ps) ps.onclick = ev=>{ if(ev.target === ps){ L.showPlan = false; render(); } };
     el.querySelectorAll('[data-jump]').forEach(b=> b.onclick = ()=>{ const i = +b.dataset.jump; if(L.items[i].status !== 'todo') L.items[i].status = 'todo'; L.cur = i; L.draft = null; L.showPlan = false; persist(); render(); });
-    on('#gyGoWarm', ()=>{ L.phase = 'warm'; L.warmAt = Date.now(); persist(); render(); });
+    on('#gyGoWarm', ()=>{ L.phase = 'warm'; L.warmAt = Date.now(); if(!L.warmMachine) L.warmMachine = G.state().prefs.warmMachine || 'tread'; persist(); render(); });
+    const pickMachine = (key, v)=>{ L[key] = v; const pr = G.state().prefs, pk = key === 'warmMachine' ? 'warmMachine' : 'coolMachine'; if(pr[pk] !== v){ pr[pk] = v; G.touchPrefs(); G.save(); } persist(); render(); };
+    el.querySelectorAll('[data-warmm]').forEach(b=> b.onclick = ()=> pickMachine('warmMachine', b.dataset.warmm));
+    el.querySelectorAll('[data-coolm]').forEach(b=> b.onclick = ()=> pickMachine('coolMachine', b.dataset.coolm));
     on('#gySkipWarm', ()=>{ L.cur = -1; L.fb = null; advance(); });
     on('#gyWarmDone', ()=>{ L.warmMin = Math.round((Date.now() - L.warmAt)/60000); L.cur = -1; L.fb = null; advance(); });
     on('#gyEnd', ()=>{ L.phase = 'sum'; L.showPlan = false; persist(); render(); });
@@ -680,7 +707,7 @@
       exercises: done.map(it=> ({ name: G.exName(G.ex(it.exId)), exId: it.exId, sets: it.result.sets })) };
     const S = G.state();
     S.sessions[id] = { day: today, label: L.label, soreness: L.soreness, areas: Object.keys(L.areas), flags: L.flags.map(i=> FLAGS[i]),
-      overall: L.sum.overall, energy: L.sum.energy, after: L.sum.after, durationMin: minutes, warmMin: L.warmMin || 0,
+      overall: L.sum.overall, energy: L.sum.energy, after: L.sum.after, durationMin: minutes, warmMin: L.warmMin || 0, warmMachine: L.warmMachine || undefined, coolMachine: L.coolMachine || undefined,
       deferred: L.items.filter(it=> it.status === 'busy' || it.status === 'deferred').map(it=> it.exId),
       cut: L.items.filter(it=> it.status === 'cut').map(it=> it.exId),
       skipped: L.items.filter(it=> it.status === 'skip').map(it=> it.exId),
