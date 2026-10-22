@@ -51,6 +51,7 @@
   };
   const AREAS = { legs:'רגליים', glutes:'ישבן', back:'גב', chest:'חזה', shoulders:'כתפיים', core:'ליבה', arms:'זרועות' };
   const EMPHASIS = { legs:1, glutes:1, core:1, arms:1 };
+  const CORE_MIN = 2;                                   // core exercises in every planned session
   const DEFAULT_TEMPLATES = {
     A:['bird_dog','plank','leg_press','hip_thrust','hip_abductor','row','pec_fly','shoulder_press'],
     B:['box_squat','plank','leg_curl','kickback','hip_adductor','lat_pulldown','chest_press','shoulder_press'],
@@ -60,6 +61,7 @@
   function defaultState(){
     return { v:1, lib:{}, custom:[], templates:JSON.parse(JSON.stringify(DEFAULT_TEMPLATES)),
       sessions:{}, activities:{}, requests:[], seeded:0, prefsAt:0, templatesAt:0,
+      warm:{ set:{}, sound:true, soundAt:0 },   // warm-up settings per machine (own timestamps, never inside prefs)
       prefs:{ minutes:55, max:60, strengthTarget:4, pilatesTarget:2, restDay:null, trainerDay:null } };
   }
   let S = defaultState();
@@ -71,6 +73,8 @@
     const o = Object.assign(d, v || {});
     ['lib','sessions','activities'].forEach(k=>{ if(!o[k] || typeof o[k]!=='object' || Array.isArray(o[k])) o[k] = {}; });
     if(!Array.isArray(o.custom)) o.custom = [];
+    if(!o.warm || typeof o.warm!=='object') o.warm = defaultState().warm;
+    if(!o.warm.set || typeof o.warm.set!=='object') o.warm.set = {};
     if(!Array.isArray(o.requests)) o.requests = [];
     if(!o.templates || typeof o.templates!=='object') o.templates = JSON.parse(JSON.stringify(DEFAULT_TEMPLATES));
     o.prefs = Object.assign(defaultState().prefs, o.prefs || {});
@@ -108,6 +112,9 @@
     c.requests.forEach(x=>{ if(x && x.id && !rq.has(x.id)){ S.requests.push(x); ch = true; } });
     if((+c.seeded||0) > (+S.seeded||0)){ S.seeded = c.seeded; ch = true; }
     if((+c.reports||0) > (+S.reports||0)){ S.reports = +c.reports; ch = true; }   // a counter: the higher one wins
+    // Warm-up settings: each machine on its own, the newer one wins; the sound switch likewise.
+    Object.keys(c.warm.set).forEach(k=>{ const a = S.warm.set[k], b = c.warm.set[k]; if(b && (!a || (+b.at||0) > (+a.at||0))){ S.warm.set[k] = b; ch = true; } });
+    if((+c.warm.soundAt||0) > (+S.warm.soundAt||0)){ S.warm.sound = c.warm.sound; S.warm.soundAt = c.warm.soundAt; ch = true; }
     // Prefs and templates are whole values: the newer edit wins. A device that never
     // touched them (at = 0) always takes the other copy, so a fresh login can't push
     // defaults over the real settings.
@@ -458,6 +465,13 @@
       return null;
     };
     const fits = id=> total() + estMin(byId(id), 2) <= budget;
+    // Every session has at least 2 core exercises, on focus days too (Yuval, 22.10.2026).
+    // They go in first so the time limit never cuts them; the round-robin below counts
+    // them in the core share. A very sore core (6+) still drops out, unless it's the focus.
+    if(!dropArea('core') || isFocus('core')){
+      pool.filter(e=> e.area === 'core' && !used.has(e.id)).sort((x, y)=> sc(y) - sc(x))
+        .forEach(e=>{ if((count.core||0) < CORE_MIN && fits(e.id)) add(e.id); });
+    }
     // A third set: on a focus day the focus exercises first; on a full-body day the area
     // with the fewest sets so far, big lifts first — so the SETS stay balanced too.
     const setsOf = a=> items.filter(it=> byId(it.exId).area === a).reduce((s, it)=> s + it.sets, 0);

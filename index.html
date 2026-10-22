@@ -1320,9 +1320,9 @@
   </div>
 </div>
 
-<script src="gym-core.js?v=22"></script>
-<script src="gym-ui.js?v=22"></script>
-<script src="gym-views.js?v=22"></script>
+<script src="gym-core.js?v=23"></script>
+<script src="gym-ui.js?v=23"></script>
+<script src="gym-views.js?v=23"></script>
 <script src="celebrate.js?v=4"></script>
 <script>
 (function(){
@@ -4362,8 +4362,9 @@
     $('woPreview').classList.add('hidden');
     woEx = []; renderWoEx();
     renderAll();
+    // Every logged workout gets confetti (celebrate.js), a PR gets the toast on top.
+    if(window.Gym && Gym.celebrateEnd) Gym.celebrateEnd(); else burstConfetti();
     if(prs.length){
-      burstConfetti();
       showToast('שיא אישי חדש! 🏆 ' + prs[0].name + ' — ' + fmt(prs[0].kg) + ' ק״ג' + (prs.length>1 ? ' (+' + (prs.length-1) + ')' : ''));
     }
   };

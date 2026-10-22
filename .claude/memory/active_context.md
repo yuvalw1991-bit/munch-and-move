@@ -39,6 +39,8 @@
 - [x] QA סבב 1 (צי 10 סוכנים read-only, 78 ממצאים: 3C/17H/29M/27L). תוקנו כל ה-3 קריטיים + חמורים מסכני-נתונים/קריסות: cloudLoadAll guard+merge (לא מוחק בשגיאה/מיזוג מקומי), renderPlan/adaptProgram/adjustKcal הגנות+throttle, undo wrong-day (deleteLog/deleteWorkout/copyPrev לוכדים viewKey), saveFav מנה מלאה (portionBase), callProxy overlay drift (showed flag), SW bypass ל-Supabase (cache v3), saveProgram/Profile→save(). אומת: סימולציית merge 4/4, renderPlan פגום לא קורס, undo ליום נכון, fav מלא. דוח: tasks/qa-report-2026-06-28.md.
 - [ ] QA סבב 2 (אחרי פיצ'ר D): נותרו חמורי-UX (aria מודלים, Tailwind CDN, צ'אט FAB ב-RTL, double-submit) + בינוניים (analysis לא נשמר בענן→צריך עמודה מוסיפה, קטגוריות local-only, lbl100k, alert/confirm).
 
+- [x] (22.10.2026) חימום באימון האישי: ספירה לאחור (דקות +/-), הגדרות מכשיר (הליכון מהירות+שיפוע, אופניים התנגדות+סל״ד, אליפטיקל התנגדות+שיפוע, מדרגות דרגה), נשמר לכל מכשיר ב-`S.warm.set` (חותמת זמן לכל מכשיר, לא בתוך prefs), צפצופי 3-2-1 + צליל ארוך בסוף + זמן חריגה ירוק, נשמר ב-`sessions[id].warm` ומוצג בהיסטוריה/דוח. קונפטי (`G.celebrateEnd`) בסיום אימון חי, ברישום ידני ובאימון בדיעבד; זז הצידה כשנפתח מסך הישג. תכנון אימון: מינימום 2 תרגילי ליבה (`CORE_MIN`). QA בסוכן עבר, כל הממצאים תוקנו. **iPhone: אין רטט בדפדפן, רק צליל; מתג שקט משתיק — לבדוק על מכשיר.** ענף claude/warmup-countdown-core, טרם נפרס.
+
 ## דיפלוי/בדיקה
 - `.vercelignore` + `.gitignore` מוציאים .claude/, tasks/, .playwright-mcp/, *-verify.png.
 - בדיקה חיה: python http.server על פורט פנוי + playwright. מצב מקומי: `localStorage.macro_localmode='true'`. מפתחות: macro_logs, macro_workouts, macro_targethist.

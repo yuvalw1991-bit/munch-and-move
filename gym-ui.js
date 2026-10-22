@@ -193,11 +193,17 @@
     if(Date.now() - L.startedAt > STALE && !['pre','plan','saved'].includes(L.phase)) rebase();
     if(L.phase === 'ex' && L.items[L.cur] && L.items[L.cur].status !== 'todo'){ setTimeout(()=> advance(), 0); }
     let el = document.getElementById('gymLive');
-    if(!el){ el = document.createElement('div'); el.id = 'gymLive'; document.body.appendChild(el); }
+    if(!el){
+      el = document.createElement('div'); el.id = 'gymLive'; document.body.appendChild(el);
+      // iOS opens sound only from a tap: any tap re-opens it (after a reload or a phone call).
+      // Only touchend / click count as a tap for iOS (touchstart / pointerdown don't).
+      const wake2 = ()=>{ if(!ac || ac.state !== 'running') unlockAudio(); };
+      ['touchend', 'click'].forEach(t=> el.addEventListener(t, wake2, { passive:true, capture:true }));
+    }
     document.documentElement.style.overflow = 'hidden';
     keepAwake();
     render();
-    clearInterval(tickT); tickT = setInterval(tick, 1000);
+    clearInterval(tickT); tickT = setInterval(tick, 250);   // 4×/s so the last 3-2-1 beeps land on their seconds
   };
   function doneMin(){ return (L.warmMin || 0) + L.items.filter(it=> it.status === 'done').reduce((a,it)=> a + G.estMin(G.ex(it.exId), (it.result && it.result.sets || []).length || it.sets), 0); }
   function rebase(){
@@ -243,7 +249,7 @@
   function tick(){
     if(!L) return;
     document.querySelectorAll('[data-tick="el"]').forEach(n=> n.textContent = clock(elapsed()));
-    document.querySelectorAll('[data-tick="warm"]').forEach(n=> n.textContent = mmss(Date.now() - (L.warmAt||Date.now())));
+    if(L.phase === 'warm' && L.warmEnd) warmTick();
     if(L.timing) document.querySelectorAll('[data-tick="plank"]').forEach(n=> n.textContent = mmss(Date.now() - L.timing));
     const rs = document.getElementById('gyRestLeft');
     if(rs && L.restEnd){
@@ -354,12 +360,145 @@
       '<button class="gy-btn gy-chip' + (cur === k ? ' on' : '') + '" ' + attr + '="' + k + '">' + m.icon + ' ' + m.name + '</button>').join('') + '</div>';
   }
   function cardioPlan(k, part){ const m = CARDIO[k] || CARDIO.tread; return m[part].map((t, i)=> '<div class="' + (i ? 'gy-mut text-[13px] mt-1' : 'gy-mut font-bold mt-2') + '">' + t + '</div>').join(''); }
+  // What can be set on each warm-up machine: [key, label, unit, step, min, max, default, history text].
+  // The defaults follow the recommendation above; after the first time, the machine
+  // opens with what was set on it last time (S.warm.set, synced per machine with its own time).
+  const WFIELDS = {
+    tread:  [['speed','מהירות','קמ״ש',0.5,1,20,5.5, v=> v + ' קמ״ש'], ['incline','שיפוע','%',0.5,0,15,3, v=> 'שיפוע ' + v + '%']],
+    bike:   [['level','התנגדות','דרגה',1,1,30,4, v=> 'התנגדות ' + v], ['rpm','סיבובים לדקה','סל״ד',5,30,140,75, v=> v + ' סל״ד']],
+    ellip:  [['level','התנגדות','דרגה',1,1,30,4, v=> 'התנגדות ' + v], ['incline','שיפוע','דרגה',1,0,20,0, v=> 'שיפוע ' + v]],
+    stairs: [['level','קצב','דרגה',1,1,30,3, v=> 'דרגה ' + v]],
+  };
+  const WMIN = { tread:6, bike:6, ellip:6, stairs:5 };
+  function warmSet(k){
+    const saved = G.state().warm.set[k] || {}, clamp = (v, lo, hi, d)=> v != null && isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : d;
+    const o = { min: Math.round(clamp(saved.min, 1, 30, WMIN[k])) };
+    WFIELDS[k].forEach(f=>{ o[f[0]] = clamp(saved[f[0]], f[4], f[5], f[6]); });
+    return o;
+  }
+  // Written only when something changed, so a workout doesn't stamp settings it never touched.
+  function rememberWarm(){
+    const k = L.wsetK, W = G.state().warm; if(!WFIELDS[k] || !L.wset) return;
+    const cur = W.set[k] || {}, keys = ['min'].concat(WFIELDS[k].map(f=> f[0]));
+    if(keys.every(x=> +cur[x] === +L.wset[x])) return;
+    W.set[k] = Object.assign({}, L.wset, { at: Date.now() }); G.save();
+  }
+  // "הליכון 7 דק׳ · 5.5 קמ״ש · שיפוע 3%" for the history, the day text and the coach report.
+  G.warmLine = function(w){
+    if(!w || !CARDIO[w.k]) return '';
+    return [CARDIO[w.k].name + (+w.min ? ' ' + w.min + ' דק׳' : '')].concat(WFIELDS[w.k].filter(f=> w[f[0]] != null).map(f=> f[7](w[f[0]]))).join(' · ');
+  };
+  // Sessions opened before the countdown existed (warmAt, no settings) carry on as a countdown.
+  function ensureWarm(){
+    const k = CARDIO[L.warmMachine] ? L.warmMachine : 'tread';
+    // A session from before the countdown: its settings are only defaults, so they aren't logged.
+    if(!L.wset && L.warmAt && !L.warmEnd) L.wsetLegacy = true;
+    if(!L.wset || L.wsetK !== k){ L.wset = warmSet(k); L.wsetK = k; }
+    if(L.warmAt && !L.warmEnd) L.warmEnd = L.warmAt + L.wset.min * 60000;
+    return k;
+  }
+
+  // ---------- sounds: short synthesized beeps (no audio files) ----------
+  // On iPhone there is no vibration in the browser, so the end of the countdown is a sound.
+  // iOS only lets sound play after a tap, so the audio is opened on "start" and on any tap
+  // in the live screen. The phone's silent switch mutes it, and music keeps playing under it.
+  let ac = null;
+  const soundOn = ()=> G.state().warm.sound !== false;
+  function audio(){
+    try{
+      if(!ac){ ac = new (window.AudioContext || window.webkitAudioContext)(); ac.onstatechange = ()=>{ if(ac.state === 'running'){ const h = document.getElementById('gyWarmHint'); if(h) h.remove(); } }; }
+      if(ac.state !== 'running') ac.resume();     // 'suspended', and iOS 'interrupted' (a call, the background)
+      return ac;
+    }catch(_){ return null; }
+  }
+  function unlockAudio(){
+    const a = audio(); if(!a) return;
+    try{ const s = a.createBufferSource(); s.buffer = a.createBuffer(1, 1, 22050); s.connect(a.destination); s.start(0); }catch(_){}
+  }
+  function tone(freq, dur, at, vol){
+    const a = audio(); if(!a) return;
+    try{
+      const t = a.currentTime + 0.02 + (at || 0), v = vol || 0.35;
+      [['square', 0.5], ['sine', 1]].forEach(([type, mix])=>{
+        const o = a.createOscillator(), g = a.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(v * mix, t + 0.01);
+        g.gain.setValueAtTime(v * mix, t + Math.max(0.02, dur - 0.05));
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+      });
+    }catch(_){}
+  }
+  const vib = p=>{ try{ navigator.vibrate && navigator.vibrate(p); }catch(_){} };
+  const beepTick = ()=>{ if(soundOn()) tone(880, 0.13); vib(60); };
+  const beepMinute = ()=>{ if(soundOn()){ tone(660, 0.15); tone(660, 0.15, 0.22); } vib([80,80,80]); };
+  const beepEnd = ()=>{ if(soundOn()){ [0, 0.32, 0.64].forEach(d=> tone(1320, 0.26, d, 0.45)); tone(1760, 0.7, 0.96, 0.45); } vib([400,150,400,150,700]); };
+  function fanfare(){
+    if(window.Celebrate && Celebrate.soundOn && !Celebrate.soundOn()) return;
+    [523, 659, 784, 1047].forEach((f, i)=> tone(f, i === 3 ? 0.55 : 0.16, i * 0.13, 0.28));
+  }
+  // The end of a workout: confetti (celebrate.js draws it above the live screen) and a short tune.
+  // When the same save unlocks an achievement, its screen (350 ms later, with its own confetti
+  // and chime) is the celebration, so this one steps aside instead of playing on top of it.
+  function celebrateEnd(){
+    unlockAudio();                                  // still inside the tap, so iOS allows the tune
+    try{ if(window.Celebrate && Celebrate.burst) Celebrate.burst('g'); }catch(_){}
+    setTimeout(()=>{
+      if(window.Celebrate && Celebrate.isOpen && Celebrate.isOpen()) return;
+      fanfare();
+      if(!(window.Celebrate && Celebrate.soundOn && !Celebrate.soundOn())) vib([30,60,30,60,60]);
+    }, 420);
+  }
+  G.celebrateEnd = celebrateEnd;
+  let lastBeep = null;
+  function warmTick(){
+    if(!L.wset) ensureWarm();
+    const left = L.warmEnd - Date.now(), sec = Math.ceil(left / 1000);
+    document.querySelectorAll('[data-tick="warm"]').forEach(n=> n.textContent = left > 0 ? mmss(left + 999) : '+' + mmss(-left));
+    const mb = document.getElementById('gyWarmMinus'); if(mb) mb.disabled = left < 65000;
+    if(left > 0 && sec !== lastBeep){
+      // A beep only on the second it belongs to: coming back to the app late doesn't replay missed ones.
+      if(lastBeep != null && sec === lastBeep - 1){ if(sec <= 3) beepTick(); else if(sec === 60 && L.wset.min > 1) beepMinute(); }
+      lastBeep = sec;
+    }
+    if(left <= 0 && !L.warmRang){ L.warmRang = true; lastBeep = null; persist(); beepEnd(); render(); }
+  }
+
+  function warmStepper(f){
+    const [key, label, unit] = f, v = L.wset[key];
+    return '<div class="gy-card" style="padding:10px 8px"><div class="gy-lbl text-center">' + label + '</div>' +
+      '<div class="gy-row mt-1" style="justify-content:space-between"><button class="gy-btn gy-step" data-wstep="' + key + '" data-dir="1" aria-label="' + label + ' למעלה">+</button>' +
+      '<div style="text-align:center;min-width:0"><div class="gy-mid" style="font-size:28px"><bdi>' + v + '</bdi></div><div class="text-[11px] gy-mut font-bold">' + unit + '</div></div>' +
+      '<button class="gy-btn gy-step" data-wstep="' + key + '" data-dir="-1" aria-label="' + label + ' למטה">−</button></div></div>';
+  }
   function renderWarm(){
-    const k = CARDIO[L.warmMachine] ? L.warmMachine : 'tread', m = CARDIO[k];
-    return '<div class="gy-card mt-3 text-center"><div style="font-size:42px">' + m.icon + '</div><div class="gy-mid mt-1">חימום · ' + m.name + '</div>' +
-      cardioPlan(k, 'warm') + machineChips(k, 'data-warmm') +
-      '<div class="gy-big" style="margin-top:18px" data-tick="warm">' + mmss(Date.now() - (L.warmAt||Date.now())) + '</div></div>' +
-      '<button id="gyWarmDone" class="gy-btn gy-pri mt-5" style="height:68px;font-size:20px;width:100%">✓ סיימתי חימום</button>';
+    const k = ensureWarm(), m = CARDIO[k], running = !!L.warmEnd, over = running && Date.now() >= L.warmEnd;
+    const fields = WFIELDS[k].map(warmStepper).join('');
+    const grid = '<div class="gy-grid2 mt-3"' + (WFIELDS[k].length === 1 ? ' style="grid-template-columns:1fr"' : '') + '>' + fields + '</div>';
+    const sound = '<button id="gyWarmSound" class="gy-btn gy-chip mt-3' + (soundOn() ? ' on' : '') + '">' + (soundOn() ? '🔔 צליל בסוף הזמן' : '🔕 בלי צליל') + '</button>';
+    if(!running){
+      return '<div class="gy-card mt-3 text-center"><div style="font-size:42px">' + m.icon + '</div><div class="gy-mid mt-1">חימום · ' + m.name + '</div>' +
+        cardioPlan(k, 'warm') + machineChips(k, 'data-warmm') + '</div>' +
+        '<div class="gy-lbl mt-4 mb-1">כמה זמן?</div>' +
+        '<div class="gy-card" style="padding:10px 12px"><div class="gy-row" style="justify-content:space-between"><button class="gy-btn gy-step" data-wstep="min" data-dir="1" aria-label="דקה נוספת">+</button>' +
+        '<div style="text-align:center"><div class="gy-big"><bdi>' + L.wset.min + '</bdi></div><div class="text-[11px] gy-mut font-bold">דקות</div></div>' +
+        '<button class="gy-btn gy-step" data-wstep="min" data-dir="-1" aria-label="דקה פחות">−</button></div></div>' +
+        '<div class="gy-lbl mt-4">ההגדרות על המכשיר</div>' + grid +
+        '<div class="text-center">' + sound + '</div>' +
+        '<button id="gyWarmStart" class="gy-btn gy-pri mt-4" style="height:68px;font-size:20px;width:100%">▶ התחלת ספירה לאחור</button>' +
+        '<button id="gySkipWarm" class="gy-btn mt-3" style="height:44px;width:100%;font-size:13px">דילוג על החימום</button>';
+    }
+    return '<div class="gy-card mt-3 text-center" style="' + (over ? 'border-color:rgba(0,255,163,.7);background:rgba(0,255,163,.07)' : '') + '">' +
+      '<div class="gy-mut font-bold">' + m.icon + ' חימום · ' + m.name + '</div>' +
+      (over ? '<div class="gy-mid mt-2" style="color:#00ffa3">✓ זמן החימום נגמר</div>' : '') +
+      '<div class="gy-big" style="font-size:min(76px,20vw);margin-top:12px;font-variant-numeric:tabular-nums;direction:ltr' + (over ? ';color:#00ffa3' : '') + '" data-tick="warm" role="timer" aria-live="off">' +
+        (over ? '+' + mmss(Date.now() - L.warmEnd) : mmss(L.warmEnd - Date.now() + 999)) + '</div>' +
+      (over ? '<div class="text-[12px] gy-mut mt-1">הזמן ממשיך לרוץ עד שלוחצים "סיימתי"</div>' :
+        '<div class="gy-row mt-3" style="justify-content:center"><button class="gy-btn gy-chip" id="gyWarmPlus">עוד דקה</button><button class="gy-btn gy-chip" id="gyWarmMinus"' + (L.warmEnd - Date.now() < 65000 ? ' disabled' : '') + '>דקה פחות</button></div>') +
+      (soundOn() && (!ac || ac.state !== 'running') ? '<div class="text-[11px] txt-amber mt-2" id="gyWarmHint">🔇 הקשה על המסך מפעילה את הצליל</div>' : '') +
+      '</div>' + grid + '<div class="text-center">' + sound + '</div>' +
+      '<button id="gyWarmDone" class="gy-btn gy-pri mt-4" style="height:68px;font-size:20px;width:100%">✓ סיימתי חימום</button>';
   }
 
   // --- exercise card
@@ -491,7 +630,7 @@
   }
   function renderSaved(){
     const nx = G.nextWorkout();
-    return '<div class="text-center" style="margin-top:22vh"><div style="font-size:56px">✅</div><div class="gy-mid mt-2">האימון נשמר</div>' +
+    return '<div class="text-center" style="margin-top:22vh"><div style="font-size:56px">🎉</div><div class="gy-mid mt-2">כל הכבוד, האימון נשמר!</div>' +
       (nx ? '<div class="gy-mut font-bold mt-3">אימון הכוח הבא:</div><div class="text-gray-100 font-black mt-1" style="font-size:18px">' + esc(nx.text) + '</div>' : '') +
       '</div><button id="gyClose" class="gy-btn gy-pri mt-8" style="height:60px;font-size:18px;width:100%">סגירה</button>';
   }
@@ -599,12 +738,31 @@
     on('#gyPlanClose', ()=>{ L.showPlan = false; render(); });
     const ps = $q('#gyPlanSheet'); if(ps) ps.onclick = ev=>{ if(ev.target === ps){ L.showPlan = false; render(); } };
     el.querySelectorAll('[data-jump]').forEach(b=> b.onclick = ()=>{ const i = +b.dataset.jump; if(L.items[i].status !== 'todo') L.items[i].status = 'todo'; L.cur = i; L.draft = null; L.showPlan = false; persist(); render(); });
-    on('#gyGoWarm', ()=>{ L.phase = 'warm'; L.warmAt = Date.now(); if(!L.warmMachine) L.warmMachine = G.state().prefs.warmMachine || 'tread'; persist(); render(); });
+    on('#gyGoWarm', ()=>{ L.phase = 'warm'; L.warmAt = null; L.warmEnd = null; L.warmRang = false; L.wset = null; L.wsetLegacy = false; if(!L.warmMachine) L.warmMachine = G.state().prefs.warmMachine || 'tread'; unlockAudio(); persist(); render(); });
     const pickMachine = (key, v)=>{ L[key] = v; const pr = G.state().prefs, pk = key === 'warmMachine' ? 'warmMachine' : 'coolMachine'; if(pr[pk] !== v){ pr[pk] = v; G.touchPrefs(); G.save(); } persist(); render(); };
-    el.querySelectorAll('[data-warmm]').forEach(b=> b.onclick = ()=> pickMachine('warmMachine', b.dataset.warmm));
+    el.querySelectorAll('[data-warmm]').forEach(b=> b.onclick = ()=>{ if(!L.wsetLegacy) rememberWarm(); pickMachine('warmMachine', b.dataset.warmm); });
     el.querySelectorAll('[data-coolm]').forEach(b=> b.onclick = ()=> pickMachine('coolMachine', b.dataset.coolm));
     on('#gySkipWarm', ()=>{ L.cur = -1; L.fb = null; advance(); });
-    on('#gyWarmDone', ()=>{ L.warmMin = Math.round((Date.now() - L.warmAt)/60000); L.cur = -1; L.fb = null; advance(); });
+    on('#gyWarmDone', ()=>{
+      L.warmMin = L.warmAt ? Math.max(1, Math.round((Date.now() - L.warmAt)/60000)) : 0;
+      if(L.wset && L.warmAt){
+        if(L.wsetLegacy) L.warmLog = { k: L.wsetK, min: L.warmMin };
+        else { rememberWarm(); L.warmLog = Object.assign({ k: L.wsetK }, L.wset, { min: L.warmMin, plan: L.wset.min }); }
+      }
+      L.cur = -1; L.fb = null; advance();
+    });
+    // warm-up countdown
+    el.querySelectorAll('[data-wstep]').forEach(b=> b.onclick = ()=>{
+      const key = b.dataset.wstep, dir = +b.dataset.dir, k = ensureWarm(); L.wsetLegacy = false;
+      if(key === 'min') L.wset.min = Math.max(1, Math.min(30, L.wset.min + dir));
+      else { const f = WFIELDS[k].find(x=> x[0] === key); if(!f) return; L.wset[key] = Math.max(f[4], Math.min(f[5], Math.round((L.wset[key] + dir * f[3]) * 10) / 10)); }
+      persist(); render();
+    });
+    on('#gyWarmStart', ()=>{ unlockAudio(); ensureWarm(); L.warmAt = Date.now(); L.warmEnd = L.warmAt + L.wset.min * 60000; L.warmRang = false; lastBeep = null; rememberWarm(); persist(); render(); });
+    const shiftWarm = d=>{ if(!L.warmEnd || L.warmRang) return; const left = L.warmEnd - Date.now() + d * 60000; if(left < 5000 || L.wset.min + d > 30) return; L.warmEnd += d * 60000; L.wset.min = Math.max(1, L.wset.min + d); lastBeep = null; persist(); render(); };
+    on('#gyWarmPlus', ()=> shiftWarm(1));
+    on('#gyWarmMinus', ()=> shiftWarm(-1));
+    on('#gyWarmSound', ()=>{ const W = G.state().warm; W.sound = !soundOn(); W.soundAt = Date.now(); G.save(); if(W.sound){ unlockAudio(); tone(880, 0.13); } render(); });
     on('#gyEnd', ()=>{ L.phase = 'sum'; L.showPlan = false; persist(); render(); });
     // exercise
     el.querySelectorAll('[data-step]').forEach(b=> b.onclick = ()=>{
@@ -707,7 +865,7 @@
       exercises: done.map(it=> ({ name: G.exName(G.ex(it.exId)), exId: it.exId, sets: it.result.sets })) };
     const S = G.state();
     S.sessions[id] = { day: today, label: L.label, soreness: L.soreness, areas: Object.keys(L.areas), flags: L.flags.map(i=> FLAGS[i]),
-      overall: L.sum.overall, energy: L.sum.energy, after: L.sum.after, durationMin: minutes, warmMin: L.warmMin || 0, warmMachine: L.warmMachine || undefined, coolMachine: L.coolMachine || undefined,
+      overall: L.sum.overall, energy: L.sum.energy, after: L.sum.after, durationMin: minutes, warmMin: L.warmMin || 0, warmMachine: L.warmMachine || undefined, warm: L.warmLog || undefined, coolMachine: L.coolMachine || undefined,
       deferred: L.items.filter(it=> it.status === 'busy' || it.status === 'deferred').map(it=> it.exId),
       cut: L.items.filter(it=> it.status === 'cut').map(it=> it.exId),
       skipped: L.items.filter(it=> it.status === 'skip').map(it=> it.exId),
@@ -715,7 +873,7 @@
       planned: L.items.length, doneN: done.length, left: L.items.filter(G.pendingItem).map(it=> it.exId), at: Date.now() };
     G.save();
     b.addWorkout(w, today);
-    L.phase = 'saved'; persist(); render();
+    L.phase = 'saved'; persist(); render(); celebrateEnd();
   }
   function saveContinuation(w, done, minutes, day){
     const b = B(), S = G.state(), meta = S.sessions[w.id] || {};
@@ -730,7 +888,7 @@
       verdicts: Object.assign({}, meta.verdicts, Object.fromEntries(done.map(it=> [it.exId, it.verdict && it.verdict.kind]))), at: Date.now() });
     G.save();
     b.updateWorkout(w, day);
-    L.phase = 'saved'; persist(); render();
+    L.phase = 'saved'; persist(); render(); celebrateEnd();
   }
   // The newest self-made workout from today that stopped before the end.
   G.unfinishedSaved = function(){
