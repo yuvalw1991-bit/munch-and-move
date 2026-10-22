@@ -51,7 +51,7 @@
   };
   const AREAS = { legs:'רגליים', glutes:'ישבן', back:'גב', chest:'חזה', shoulders:'כתפיים', core:'ליבה', arms:'זרועות' };
   const EMPHASIS = { legs:1, glutes:1, core:1, arms:1 };
-  const CORE_MIN = 2;                                   // core exercises in every planned session
+  const coreMin = mins=> mins >= 30 ? 2 : 1;             // core exercises in every planned session (1 in a short one)
   const DEFAULT_TEMPLATES = {
     A:['bird_dog','plank','leg_press','hip_thrust','hip_abductor','row','pec_fly','shoulder_press'],
     B:['box_squat','plank','leg_curl','kickback','hip_adductor','lat_pulldown','chest_press','shoulder_press'],
@@ -465,12 +465,12 @@
       return null;
     };
     const fits = id=> total() + estMin(byId(id), 2) <= budget;
-    // Every session has at least 2 core exercises, on focus days too (Yuval, 22.10.2026).
+    // Every session has at least 2 core exercises (1 under 30 minutes), on focus days too (Yuval, 22.10.2026).
     // They go in first so the time limit never cuts them; the round-robin below counts
     // them in the core share. A very sore core (6+) still drops out, unless it's the focus.
     if(!dropArea('core') || isFocus('core')){
       pool.filter(e=> e.area === 'core' && !used.has(e.id)).sort((x, y)=> sc(y) - sc(x))
-        .forEach(e=>{ if((count.core||0) < CORE_MIN && fits(e.id)) add(e.id); });
+        .forEach(e=>{ if((count.core||0) < coreMin(mins) && fits(e.id)) add(e.id); });
     }
     // A third set: on a focus day the focus exercises first; on a full-body day the area
     // with the fewest sets so far, big lifts first — so the SETS stay balanced too.
