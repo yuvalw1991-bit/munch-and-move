@@ -49,6 +49,7 @@
     const m = S().sessions[w.id] || {}, a = S().activities[w.id];
     const p = [];
     if(+w.minutes) p.push(w.minutes + ' דק׳');
+    if(m.warm && G.warmLine) p.push('חימום: ' + G.warmLine(m.warm));
     if(m.soreness != null) p.push('תפיסות לפני ' + m.soreness);
     if(m.overall != null) p.push('קושי כללי ' + m.overall);
     if(m.energy != null) p.push('אנרגיה ' + m.energy);
@@ -310,6 +311,7 @@
           S().sessions[w.id] = eopts.trainer ? { day: draft.day, trainer:true, title: draft.note || 'אימון עם ' + coachWord(), source: eopts.source || '', at: Date.now() }
                                              : Object.assign({ day: draft.day, manual:true, at: Date.now() }, sp.used ? { smart:true } : {});
           G.save();
+          if(G.celebrateEnd) G.celebrateEnd();
         }
         const added = draft.ex.filter(e=> e.isNew && e.exId).length;
         b.showToast(eopts.trainer ? 'האימון עם ' + coachWord() + ' נשמר ✓' + (added ? ' · ' + added + ' תרגילים חדשים נוספו למעקב' : '') : 'נשמר ✓');
