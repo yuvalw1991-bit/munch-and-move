@@ -427,10 +427,6 @@
   <section>
     <div class="flex items-center justify-between mb-2 px-1">
       <h2 id="logHeading" class="text-sm font-black neon-grad inline-block">📋 היום</h2>
-      <div class="flex items-center gap-3">
-        <button id="copyPrevBtn" class="text-[11px] font-bold txt-amber active:scale-95 transition" title="העתק את היום הקודם שנרשם אל היום המוצג">📋 כמו אתמול</button>
-        <button id="clearDayBtn" class="text-[11px] font-bold text-gray-500 active:text-red-400 transition">נקה הכל</button>
-      </div>
     </div>
     <div id="logList" class="space-y-2"></div>
   </section>
@@ -3250,53 +3246,6 @@
     openFavCatModal(fv.id);
   };
 
-  // "כמו אתמול" — copy the most recent earlier day that has logs into the viewed day.
-  function recentLoggedDayBefore(key){
-    const days = Object.keys(allLogs).filter(d => d < key && (allLogs[d]||[]).length > 0).sort();
-    return days.length ? days[days.length-1] : null;
-  }
-  $('copyPrevBtn').onclick = ()=>{
-    const key = viewKey;                  // capture target day NOW (stable through the undo window)
-    const src = recentLoggedDayBefore(key);
-    if(!src){ showToast('אין יום קודם עם רישומים להעתיק'); return; }
-    // Tapping twice used to silently double the day.
-    if((allLogs[key]||[]).length && !confirm('כבר יש ' + allLogs[key].length + ' פריטים ביום הזה. להוסיף עליהם גם את הפריטים מהיום הקודם?')) return;
-    const copies = (allLogs[src]||[]).map(l => ({
-      ...l, id: uid(),
-      components: Array.isArray(l.components) ? l.components.map(co => ({...co})) : l.components,
-    }));
-    if(!allLogs[key]) allLogs[key] = [];
-    copies.forEach(c => { allLogs[key].push(c); cInsertLog(c, key); });
-    save(LS.logs, allLogs);
-    renderAll();
-    const srcLabel = dateFromKey(src).toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-    showToast('הועתקו ' + copies.length + ' פריטים מ-' + srcLabel + ' ✓ (לחיצה נוספת תעתיק שוב)', ()=>{
-      const ids = new Set(copies.map(c => c.id));
-      allLogs[key] = (allLogs[key]||[]).filter(x => !ids.has(x.id));
-      copies.forEach(c => cDeleteLog(c.id));
-      save(LS.logs, allLogs);
-      renderAll();
-    });
-  };
-
-  $('clearDayBtn').onclick = ()=>{
-    if(dayLogs().length===0) return;
-    const key = viewKey;                       // capture NOW — the undo window outlives navigation
-    const removed = (allLogs[key]||[]).slice();
-    if(!confirm('למחוק את כל ' + removed.length + ' הרישומים של היום שמוצג?')) return;
-    removed.forEach(it=>{ if(it && it.id) outboxAdd({ op:'del', t:'logs', id:it.id }); });
-    cClearDay(key, removed.map(it=>it&&it.id).filter(Boolean));
-    allLogs[key] = [];
-    save(LS.logs, allLogs);
-    renderAll();
-    // This is the most destructive action in the app — it must be undoable like every other one.
-    showToast('נמחקו ' + removed.length + ' רישומים', ()=>{
-      allLogs[key] = removed;
-      save(LS.logs, allLogs);
-      removed.forEach(it=> cInsertLog(it, key));
-      renderAll();
-    });
-  };
 
   // ---------- Settings modal ----------
   function openSettings(){

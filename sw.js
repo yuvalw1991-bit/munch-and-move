@@ -5,7 +5,7 @@
 //   • cross-origin (CDN/SDK)  → stale-while-revalidate
 //   • /api/* and non-GET      → always network (dynamic AI calls, Supabase writes)
 // Bump CACHE when the shell asset list changes to evict the old cache.
-const CACHE = 'munch-move-v42';  // v20 (v19 added the gym files): gym live mode (gym-*.js precached; bump ?v= in index.html AND here on every change)
+const CACHE = 'munch-move-v43';  // v20 (v19 added the gym files): gym live mode (gym-*.js precached; bump ?v= in index.html AND here on every change)
 
 const SHELL = [
   '/', '/index.html', '/manifest.json',
